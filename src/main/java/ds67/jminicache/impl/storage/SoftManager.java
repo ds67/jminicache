@@ -1,6 +1,7 @@
 package ds67.jminicache.impl.storage;
 
 import java.lang.ref.ReferenceQueue;
+import java.util.Collection;
 import java.util.Set;
 
 import ds67.jminicache.impl.guard.GuardIF;
@@ -111,4 +112,8 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 		 return wrappedCacheManager.keySet();
 	 }
 
+	 @Override
+ 	 public Collection<PayloadIF<Key, Value>> values() {
+		 return wrappedCacheManager.values();
+	}
 }

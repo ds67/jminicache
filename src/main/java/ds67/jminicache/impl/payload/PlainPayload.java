@@ -1,7 +1,7 @@
 package ds67.jminicache.impl.payload;
 
-public class PlainPayload<Key, Payload> implements PayloadIF<Key, Payload> {
-
+public class PlainPayload<Key, Payload> implements PayloadIF<Key, Payload> 
+{
 	private Payload payload;
 	
 	public PlainPayload(Payload payload) {

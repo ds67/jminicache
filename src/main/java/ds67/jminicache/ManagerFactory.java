@@ -8,6 +8,7 @@ import ds67.jminicache.impl.guard.SimpleLockGuard;
 import ds67.jminicache.impl.payload.KeySoftValuePayload;
 import ds67.jminicache.impl.payload.KeyValuePayload;
 import ds67.jminicache.impl.payload.ListWrapper;
+import ds67.jminicache.impl.payload.PayloadIF;
 import ds67.jminicache.impl.payload.PlainPayload;
 import ds67.jminicache.impl.storage.StorageManagerIF;
 import ds67.jminicache.impl.storage.SimpleCacheManager;
@@ -46,10 +47,27 @@ public class ManagerFactory {
 		}
 		else if (soft==false && policy==CachePolicy.EVICTION_NONE) {
 			final var evictionManager = new NoopManager<Key, Value>((k,v) -> {
-				return new PlainPayload<Key, Value>(v);
+				// return new PlainPayload<Key, Value>(v);
+				return new PayloadIF<Key,Value>() {
+
+					@Override
+					public void onRemove() {
+					}
+
+					@Override
+					public Value getPayload() {
+						return v;
+					}
+
+					@Override
+					public Key getKey() {
+						return null;
+					}
+					
+				};
 			});
 			
-			return new SimpleCacheManager<Key, Value, PlainPayload<Key, Value>>(new ReadWriteGuard(), evictionManager);
+			return new SimpleCacheManager<Key, Value, PayloadIF<Key, Value>>(new ReadWriteGuard(), evictionManager);
 		}
 		
 		return null;

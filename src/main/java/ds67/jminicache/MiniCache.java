@@ -2,9 +2,17 @@ package ds67.jminicache;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Flow.Publisher;
+import java.util.concurrent.Flow.Subscriber;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -12,7 +20,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import ds67.jminicache.CachePolicy.Category;
-import ds67.jminicache.MiniCache.ValueWithExpiry;
 import ds67.jminicache.impl.guard.GuardIF;
 import ds67.jminicache.impl.storage.ExpiryManager;
 import ds67.jminicache.impl.storage.StorageManagerIF;
@@ -28,9 +35,8 @@ import ds67.jminicache.impl.storage.StorageManagerIF;
  *
  * @param <Value>
  */
-public class MiniCache<Key, Value>
-{
-	
+public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Value>>
+{	
 	/**
 	 * Wrapper class to allow supply functions to return the 
 	 * 
@@ -38,7 +44,7 @@ public class MiniCache<Key, Value>
 	 *
 	 * @param <Value>
 	 */
-	static class ValueWithExpiry<Value>
+	static public class ValueWithExpiry<Value>
 	{
 		final private Value value;
 		final private long expiry;
@@ -73,7 +79,7 @@ public class MiniCache<Key, Value>
 				evictionPolicy=policy;
 			}
 			else if (policy.compareTo(CachePolicy.ENABLE_VALUE_EXPIRY)==0) {
-				expiryManager = new ExpiryManager<>(this::remove);
+				expiryManager = new ExpiryManager<>(this::remove, getSchedulerService());
 			}
 		}
 		
@@ -81,6 +87,7 @@ public class MiniCache<Key, Value>
 		guard = manager.getGuard();
 	}
 
+	private Function<Key, ValueWithExpiry<Value>> valueWithExpiryFactory = null;
 	private Function<Key, Value> valueFactory = null;
 	
 	private final GuardIF guard;
@@ -187,6 +194,7 @@ public class MiniCache<Key, Value>
 	 * 
 	 * @param key
 	 * @param supplier
+	 * @param expireDate timestamp when the entry will expire
      *
 	 * @return retrieved value from cache
 	 * @throws Exception
@@ -207,8 +215,13 @@ public class MiniCache<Key, Value>
 		}
 		
 		manager.onBeforeWrite(w);	
-		manager.put(key, w);
+		final var previousValue = manager.put(key, w);
+		
 				
+		if (publisher!=null) {
+			final Value oldValue = previousValue==null?null:previousValue.getPayload();
+			publisher.submit (new CacheChangeEvent<Key, Value>(key, oldValue, value));		
+		}
 		unsynchronized_shrink();
 	}
 
@@ -220,7 +233,7 @@ public class MiniCache<Key, Value>
 	 * @param key lookup key of the value
 	 * @param value value to add
 	 */
-	protected void set (final Key key, final Value value)	
+	public void set (final Key key, final Value value)	
 	{
 		guard.writeLocked(() -> unsynchronized_set(key,value,0));
 	}
@@ -232,7 +245,7 @@ public class MiniCache<Key, Value>
 	 * @param value value to add
 	 * @param expiryDate timestamp in milliseconds when the value will expire
 	 */
-	protected void set (final Key key, final Value value, long expiryDate)	
+	public void set (final Key key, final Value value, long expiryDate)	
 	{
 		guard.writeLocked(() -> unsynchronized_set(key,value,expiryDate));
 	}
@@ -246,6 +259,7 @@ public class MiniCache<Key, Value>
 	 * 
 	 * @param content Map of key and value elements to be inserted in the map. The map itself must not be altered will inserting into the cache.
 	 * @param expiryDate timestamp (in milliseconds like System.getCurrentMillis()) when the entries will expire and be removed from the cache 
+	 * 
 	 * The map elements are not deep copied into the cache
 	 */
 	public void set (final Map<Key, Value> content, long expiryDate)
@@ -279,15 +293,13 @@ public class MiniCache<Key, Value>
 	 * @throws Exception
 	 */
 	public Value get (final Key key) throws Exception
-	{
-		return get(key,0);
-	}
-	
-	public Value get (final Key key, long expiryDate) throws Exception
 	{	
+		if (valueWithExpiryFactory!=null) {
+			return get(key, () -> valueWithExpiryFactory.apply(key));
+		}	
 		if (valueFactory!=null) {
-			return get(key, () -> valueFactory.apply(key), expiryDate);
-		}		
+			return get(key, () -> new ValueWithExpiry<Value>(valueFactory.apply(key),0));
+		}
 		return fetch(key);
 	}
 	
@@ -312,18 +324,23 @@ public class MiniCache<Key, Value>
 		return guard.readLocked(() -> this.unsynchronized_fetch(key));	
 	}
 	
+	protected Value unsynchronized_remove (Key key)
+	{
+		final var element = manager.remove(key);
+		manager.onDeletion(element);
+		if (expiryManager!=null) expiryManager.remove(key);
+		if (publisher!=null) publisher.submit (new CacheChangeEvent<Key, Value>(key, element.getPayload(), null));
+		return element.getPayload();		
+	}
+	
 	/**
 	 * Removed an object from the cache
 	 * 
 	 * @param key which will be removed from the cache
 	 */
 	public void remove (Key key)
-	{
-		guard.writeLocked(() -> {
-			final var element = manager.remove(key);
-			manager.onDeletion(element);
-			if (expiryManager!=null) expiryManager.remove(key);
-		});
+	{		
+		guard.writeLocked(() -> unsynchronized_remove(key));		
 	}
 
 	/**
@@ -368,7 +385,7 @@ public class MiniCache<Key, Value>
 		if (maxSize<1) return;		
 		while (manager.cachesize()>maxSize) {
 			final var last = manager.getForDeletion();
-			if (last!=null) remove(last.getKey());
+			if (last!=null) unsynchronized_remove(last.getKey());
 			else break;
 		}	
 	}
@@ -403,9 +420,27 @@ public class MiniCache<Key, Value>
 	 * @param valueFactory
 	 * @return this object to provide a builder like interface
 	 */
+	public MiniCache<Key, Value> setValueWithExpiryFactory (final Function<Key,ValueWithExpiry<Value>> valueFactory)
+	{
+		this.valueWithExpiryFactory=valueFactory;
+		this.valueFactory=null;
+		return this;
+	}
+	
 	public MiniCache<Key, Value> setValueFactory (final Function<Key,Value> valueFactory)
 	{
 		this.valueFactory=valueFactory;
+		valueWithExpiryFactory=null;
+		return this;
+	}
+	
+	public MiniCache<Key, Value> setRefreshMethod (final Function<Key,ValueWithExpiry<Value>> refreshMethod)
+	{
+		if (refreshMethod==null) expiryManager.setDeletionTrigger(this::remove);
+		else expiryManager.setDeletionTrigger((key) -> {
+			final var newValue = refreshMethod.apply(key);
+			this.set(key, newValue.getValue(), newValue.getExpiry());
+		});
 		return this;
 	}
 	
@@ -420,11 +455,24 @@ public class MiniCache<Key, Value>
 	}
 	
 	/**
+	 * Gets the currently installed valueFactory
+	 *  
+	 * @return the installed value factory or null if non is installed
+	 */
+	public Function<Key,ValueWithExpiry<Value>> getValueWithExpiryFactory ()
+	{
+		return this.valueWithExpiryFactory;
+	}
+	
+	/**
 	 * Clears the content of the cache.
 	 */
 	public void clear ()
 	{
-		guard.writeLocked(manager::clear);
+		guard.writeLocked(() -> {
+			if (publisher!=null) publisher.submit(new CacheChangeEvent<Key, Value>(null, null, null));
+			manager.clear();
+		});
 	}
 	
 	/**
@@ -437,7 +485,27 @@ public class MiniCache<Key, Value>
 		return guard.readLocked(manager::keySet);
 	}
 	
-	/************************************************************************************************************************************
+	/**
+	 * Allows to use a write lock transaction around a function.
+	 * 
+	 * @param f function which is executed in exclusive access mode
+	 */
+	public void writeLocked (Runnable f)
+	{
+		guard.writeLocked(f);
+	}
+	
+	/**
+	 * Allows to use a read lock transaction around a function.
+	 * 
+	 * @param f function which is executed in exclusive access mode
+	 */
+	public void readLocked (Runnable f)
+	{
+		guard.readLocked(f);
+	}
+	
+	/* **********************************************************************************************************************************
 	 * 
 	 * Specializations for expiry duration, so that different timespans can be given
 	 * 
@@ -483,5 +551,79 @@ public class MiniCache<Key, Value>
 				}
 			}			
 		});
+	}
+	
+	public Collection<Value> values ()
+	{
+		return guard.readLocked(() -> {
+			final var values = new ArrayList<Value>(this.size()); 
+			for (var entry: manager.values()) values.add(entry.getPayload());
+			return values;
+		});
+	}
+	
+	public Collection<ValueWithExpiry<Value>> valuesWithExpiryDate ()
+	{
+		// Define a lambda function to retrieve the expire time. If no expire manager exists its always 0, otherwise ask the expiryManager
+		final Function<Key, Long> getExpireTime = (expiryManager==null)?(key) -> 0L:(key) -> expiryManager.getExpiryTime(key);
+		
+		return guard.readLocked(() -> {
+			final var values = new ArrayList<ValueWithExpiry<Value>>(this.size()); 
+			for (var entry: manager.values()) {
+				values.add(new ValueWithExpiry<Value>(entry.getPayload(), getExpireTime.apply(entry.getKey())));
+			}
+			return values;
+		});
+	}
+	
+	/**
+	 * Create a single scheduler thread for all cache instances. By using an own thread factory it is possible so set a descriptive name
+	 * and the thread as a daemon thread to allow a graceful application shutdown
+	 */
+	private static ScheduledExecutorService scheduler = null;
+	
+	public static ScheduledExecutorService getSchedulerService ()
+	{
+		if (scheduler==null) {
+			scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+				@Override
+				public Thread newThread(Runnable r) {
+				       final Thread t = Executors.defaultThreadFactory().newThread(r);
+		               t.setDaemon(true);
+		               t.setName("Minicache Expiryscheduler");
+		               return t;
+				}
+			});
+		}
+		return scheduler;
+	}
+	
+	public static void setSchedulerService (final ScheduledExecutorService scheduler)
+	{
+		MiniCache.scheduler = scheduler;
+	}
+
+	/* **********************************************************************************************************************************
+	 * 
+	 * Subscription interface
+	 * 
+	 ************************************************************************************************************************************/
+		
+	private SubmissionPublisher<CacheChangeEvent<Key, Value>> publisher = null;
+	
+	/**
+	 * Offers an subscription interface to monitor changes to the cache. New inserts, updates and removals are published asynchronously using the 
+	 * #java.util.concurrent.Flow mechanisms.
+	 * 
+	 * You may add as many subscribers as you like. 
+	 * 
+	 */
+	@Override
+	public synchronized void subscribe(final Subscriber<? super CacheChangeEvent<Key, Value>> subscriber) {
+		if (publisher==null) {
+			publisher = new SubmissionPublisher<>();
+		}
+		
+		publisher.subscribe(subscriber);
 	}
 }

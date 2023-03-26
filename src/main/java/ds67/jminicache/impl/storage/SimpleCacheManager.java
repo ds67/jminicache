@@ -98,4 +98,10 @@ public class SimpleCacheManager<Key, Value, Wrapper extends PayloadIF<Key, Value
 	 {
 		 return cache.keySet();
 	 }
+	 
+	 @SuppressWarnings("unchecked")
+	 @Override
+ 	 public Collection<PayloadIF<Key, Value>> values() {
+	    return (Collection<PayloadIF<Key, Value>>)cache.values();	 
+	 }
 }

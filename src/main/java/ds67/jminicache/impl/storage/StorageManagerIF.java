@@ -1,5 +1,6 @@
 package ds67.jminicache.impl.storage;
 
+import java.util.Collection;
 import java.util.Set;
 
 import ds67.jminicache.impl.guard.GuardIF;
@@ -37,4 +38,5 @@ public interface StorageManagerIF<Key, Value>
 	
 	public void clear ();
 	public Set<Key> keySet ();
+	public Collection<PayloadIF<Key, Value>> values();
 }
