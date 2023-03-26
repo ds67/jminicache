@@ -1,12 +1,11 @@
 # jminicache
 Small but fast memory cache of arbitrary objects
 
-
 # Usage
 
-You must create an object of `ds.67.jmininicache.MiniCache`. 
+You must create an object of `ds67.jmininicache.MiniCache`. 
 
-The created cache object is fully mulithreaded. Read operations are done in parallel, for writes the full cache access is shorty blocked. 
+The created cache object is fully multithreaded. Read operations are done in parallel, for writes the full cache access is shortly blocked. However when your supplier function is called to add yet unknown values the cache is not blocked when executing the supplier function.
 
 Then consider the upate and the removal policies.
 
@@ -39,7 +38,9 @@ therefore it may take time.
 	   return v;
 	});
 
-## Removal policies
+In fact thats the simplest method to use the cache
+
+## Eviction policies
 
 To limit the grow of a cache values might be removed
 
@@ -48,9 +49,10 @@ To limit the grow of a cache values might be removed
     
     To do this add either `CachePolicy.EVICTION_LRU` or `CachePolicy.EVICTION_FIFO` to the constructor parameters.
     
-2.  if a memory shortage occur and the values are garbage collected. Which objects are removed is decided by the garbage collector. 
+2.  if a memory shortage occur and the values are garbage collected. Which objects are removed is decided by the garbage collector.
+ 
 3.  a value is outdated. That means that a generated value is cache for a certain timespan and than removed 
-4.  When the key is not longer available. This mode is useful when the cache stored additional information for an object. The cache content is automatically
-    removed when the referenced object is unused.
+
+4.  When the key is not longer available. This mode is useful when the cache stores additional information for an object. The cache content is automatically removed when the referenced object is unused.
 
 You may combine the different removal policies.

@@ -2,14 +2,16 @@ package ds67.jminicache.impl.eviction;
 
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import ds67.jminicache.impl.payload.ListWrapper;
 import ds67.jminicache.impl.payload.PayloadIF;
 
 public class LRUManager<Key, Value, Wrapper extends ListWrapper<Key,Value, ? extends PayloadIF<Key, Value>>> extends ListEvictionManager<Key, Value, Wrapper> implements EvictionManagerIF<Key, Value, Wrapper> {
 	
-	public LRUManager(final BiFunction<Key, Value, Wrapper> constructor) {
-		super(constructor);
+	public LRUManager(final BiFunction<Key, Value, Wrapper> constructor,
+			final Function<Wrapper, Value> unWrapper) {
+		super(constructor,unWrapper);
 	}
 	
 	@Override
@@ -36,9 +38,9 @@ public class LRUManager<Key, Value, Wrapper extends ListWrapper<Key,Value, ? ext
 		delete (w);
 	}
 	
-	public Wrapper getForDeletion ()
+	public Key getForDeletion ()
 	{
-		return getFirstEntry();
+		return getFirstEntry().getKey();
 	}
 	
 	@Override

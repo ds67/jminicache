@@ -2,18 +2,24 @@ package ds67.jminicache.impl.storage;
 
 import java.lang.ref.ReferenceQueue;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import ds67.jminicache.impl.guard.GuardIF;
 import ds67.jminicache.impl.payload.PayloadIF;
 
-public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> implements StorageManagerIF<Key, Value>{
+public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> implements StorageManagerIF<Key, Value, Wrapper>{
 
-	private final StorageManagerIF<Key, Value> wrappedCacheManager;
+	private final StorageManagerIF<Key, Value, Wrapper> wrappedCacheManager;
 	
-	public SoftManager(final StorageManagerIF<Key, Value> wrapped, Constructor<Key, Value, Wrapper> constructor) {
-		this.constructor=constructor;
+	public SoftManager(final StorageManagerIF<Key, Value, Wrapper> wrapped, 
+			           Constructor<Key, Value, Wrapper> constructor,
+			           Function<Wrapper, Value> unWrapper) {
+		this.wrapper=constructor;
 		this.wrappedCacheManager=wrapped;
+		this.unWrapper=unWrapper;
 	}
 
 	@Override
@@ -23,7 +29,7 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 	}
 
 	@Override
-	public PayloadIF<Key, Value> getForDeletion() {
+	public Key getForDeletion() {
 		return wrappedCacheManager.getForDeletion();
 	}
 
@@ -34,30 +40,15 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 	}
 
 	@Override
-	public PayloadIF<Key, Value> get (final Key key)
+	public Value get (final Key key)
 	{ 
 		return wrappedCacheManager.get(key); 
 	}
 	
 	@Override
-	public PayloadIF<Key, Value> remove (Key key)
+	public Value remove (Key key)
 	{
 		return wrappedCacheManager.remove(key);
-	}
-
-	@Override
-	public void onRead (PayloadIF<Key, Value> w) {
-		wrappedCacheManager.onRead(w);		
-	}
-
-	@Override
-	public void onBeforeWrite(PayloadIF<Key, Value> w) {
-		wrappedCacheManager.onBeforeWrite(w);		
-	}
-
-	@Override
-	public void onDeletion(PayloadIF<Key, Value> w) {
-		wrappedCacheManager.onDeletion(w);	
 	}
 
 	private final ReferenceQueue<Value> referenceQueue = new ReferenceQueue<>();
@@ -82,16 +73,23 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 		public Wrapper apply (Key k, Value v, ReferenceQueue<Value> q);
 	}
 	
-	private final Constructor<Key, Value, Wrapper> constructor;
+	private final Constructor<Key, Value, Wrapper> wrapper;
+	private final Function<Wrapper, Value> unWrapper;
 	
 	@Override
-	public PayloadIF<Key, Value> createWrapper(Key k, Value v) {
-		return constructor.apply(k,v,getReferenceQueue());
+	public Wrapper wrap(Key k, Value v) {
+		return wrapper.apply(k,v,getReferenceQueue());
+	}
+	
+	public Value unwrap (Wrapper w)
+	{
+		return unWrapper.apply(w);
 	}
 
 	@Override
-	public PayloadIF<Key, Value> put(Key key, PayloadIF<Key, Value> value) {
-		return wrappedCacheManager.put(key, value);
+	public Value put(Key key, Value value, BiFunction<Key, Value, Wrapper> wrapper) {
+		if (wrapper==null) wrapper=this::wrap;
+		return wrappedCacheManager.put(key, value, wrapper);
 	}
 
 	@Override
@@ -113,7 +111,13 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 	 }
 
 	 @Override
- 	 public Collection<PayloadIF<Key, Value>> values() {
-		 return wrappedCacheManager.values();
+ 	 public Set<Map.Entry<Key,Value>> entrySet() {
+		 return wrappedCacheManager.entrySet();
 	}
+	 
+	 @Override
+	 public Collection<Value> values ()
+	 {
+		 return wrappedCacheManager.values();
+	 }
 }

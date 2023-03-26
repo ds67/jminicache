@@ -1,10 +1,11 @@
 package ds67.jminicache.impl.storage;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 import ds67.jminicache.impl.guard.GuardIF;
-import ds67.jminicache.impl.payload.PayloadIF;
 
 /**
  * The storage manager cares for the storage of the cached data. This is more or less just a map to access values by the key.
@@ -17,26 +18,24 @@ import ds67.jminicache.impl.payload.PayloadIF;
  * @param <Key>
  * @param <Value>
  */
-public interface StorageManagerIF<Key, Value>
+public interface StorageManagerIF<Key, Value, Wrapper>
 {
-	public PayloadIF<Key, Value> get (final Key key);
-	public PayloadIF<Key, Value> remove (Key key);
-	public PayloadIF<Key, Value> put (Key key, PayloadIF<Key, Value> value);
+	public Value get (final Key key);
+	public Value remove (Key key);
+	public Value put (Key key, Value value, BiFunction<Key, Value, Wrapper> wrapper);
 	
 	public int cachesize ();
 	public boolean contains (Key key);
 	
-	public void onRead (final PayloadIF<Key, Value> w);
-	public void onBeforeWrite (final PayloadIF<Key, Value> w);
-	public void onDeletion (final PayloadIF<Key, Value> w);
-
-	public PayloadIF<Key, Value> getForDeletion ();
+	public Key getForDeletion ();
 	
-	public PayloadIF<Key, Value> createWrapper (final Key k, final Value v);
+	public Wrapper wrap (final Key k, final Value v);
+	public Value unwrap (final Wrapper w);
 	
 	public GuardIF getGuard ();
 	
 	public void clear ();
 	public Set<Key> keySet ();
-	public Collection<PayloadIF<Key, Value>> values();
+	public Set<Map.Entry<Key, Value>> entrySet();
+	public Collection<Value> values();
 }

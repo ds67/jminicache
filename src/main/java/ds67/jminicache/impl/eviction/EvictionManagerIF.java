@@ -25,7 +25,7 @@ import ds67.jminicache.impl.payload.PayloadIF;
  * @param <Value> Type of the cache values (payload)
  * @param <Wrapper> Type of the wrapper which will help organizing the items in eviction order
  */
-public interface EvictionManagerIF<Key, Value, Wrapper extends PayloadIF<Key, ?>> {
+public interface EvictionManagerIF<Key, Value, Wrapper> {
 	
 	public void onRead (final Map<Key, Wrapper> cache, final Wrapper w);
 	public void onBeforeWrite (final Map<Key, Wrapper> cache, final Wrapper w);
@@ -33,7 +33,8 @@ public interface EvictionManagerIF<Key, Value, Wrapper extends PayloadIF<Key, ?>
 	
 	public void onClear ();
 	
-	public Wrapper getForDeletion ();
+	public Key getForDeletion ();
 	
 	public Wrapper createWrapper (final Key k, final Value v);
+	public Value unwrap (Wrapper w);
 }

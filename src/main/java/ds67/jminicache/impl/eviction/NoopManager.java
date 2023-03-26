@@ -1,10 +1,6 @@
 package ds67.jminicache.impl.eviction;
 
 import java.util.Map;
-import java.util.function.BiFunction;
-
-import ds67.jminicache.impl.payload.PayloadIF;
-import ds67.jminicache.impl.payload.PlainPayload;
 
 /**
  * Simplest possible eviction manager. It doesn't provide an eviction at all. All cached entries stay valid until they
@@ -17,34 +13,35 @@ import ds67.jminicache.impl.payload.PlainPayload;
  * @param <Key>
  * @param <Value>
  */
-public class NoopManager<Key, Value> implements EvictionManagerIF<Key, Value, PayloadIF<Key, Value>> {
+public class NoopManager<Key, Value> implements EvictionManagerIF<Key, Value, Value> {
 
-	private final BiFunction<Key, Value, PayloadIF<Key, Value>> constructor;
-	
-	public NoopManager(BiFunction<Key, Value, PayloadIF<Key, Value>> constructor) {
-		this.constructor=constructor;
+	public NoopManager() {
 	}
 	
 	@Override
-	public  PayloadIF<Key, Value> createWrapper(Key k, Value v) {
-		return constructor.apply(k, v);
+	public Value createWrapper(Key k, Value v) {
+		return v;
+	}
+	
+	public Value unwrap (Value v) {
+		return v;
 	}
 
 	@Override
-	public PlainPayload<Key, Value> getForDeletion() {
+	public Key getForDeletion() {
 		return null;
 	}
 
 	@Override
-	public void onRead(Map<Key, PayloadIF<Key, Value>> cache, PayloadIF<Key, Value> w) {	
+	public void onRead(Map<Key, Value> cache, Value w) {	
 	}
 
 	@Override
-	public void onBeforeWrite(Map<Key, PayloadIF<Key, Value>> cache, PayloadIF<Key, Value> w) {
+	public void onBeforeWrite(Map<Key,Value> cache, Value w) {
 	}
 
 	@Override
-	public void onDeletion(Map<Key, PayloadIF<Key, Value>> cache, PayloadIF<Key, Value> w) {
+	public void onDeletion(Map<Key, Value> cache, Value w) {
 	}
 
 	@Override

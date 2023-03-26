@@ -1,14 +1,18 @@
 package ds67.jminicache.impl.storage;
 
+import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 import ds67.jminicache.impl.eviction.EvictionManagerIF;
 import ds67.jminicache.impl.guard.GuardIF;
-import ds67.jminicache.impl.payload.PayloadIF;
 
-public class SimpleCacheManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> implements StorageManagerIF<Key, Value>{
+public class SimpleCacheManager<Key, Value, Wrapper> implements StorageManagerIF<Key, Value, Wrapper>{
 
 	private final EvictionManagerIF<Key, Value, Wrapper> evictionManager;
 	
@@ -24,42 +28,30 @@ public class SimpleCacheManager<Key, Value, Wrapper extends PayloadIF<Key, Value
 	{
 		return this.guard;		
 	}
-	
-	@SuppressWarnings("unchecked")
-	@Override
-	public void onRead(final PayloadIF<Key, Value> w) {
-		evictionManager.onRead(cache, (Wrapper)w);		
-	}
-
-	@SuppressWarnings("unchecked")
-	@Override
-	public void onBeforeWrite(final PayloadIF<Key, Value> w) {
-		evictionManager.onBeforeWrite(cache, (Wrapper)w);	
-	}
-
-	@SuppressWarnings("unchecked")
-	@Override
-	public void onDeletion(final PayloadIF<Key, Value> w) {
-		evictionManager.onDeletion(cache, (Wrapper)w);
-	}
 
 	@Override
-	public Wrapper createWrapper(Key k, Value v) {
+	public Wrapper wrap(Key k, Value v) {
 		return evictionManager.createWrapper(k, v);
 	}
+	
+	public Value unwrap (Wrapper w) {
+		return evictionManager.unwrap(w);
+	}
 
 	@Override
-	public PayloadIF<Key, Value> getForDeletion() {
+	public Key getForDeletion() {
 		return evictionManager.getForDeletion();
 	}
 
 	private HashMap<Key, Wrapper> cache = new HashMap<>();
 	
-	@SuppressWarnings("unchecked")
 	@Override
-	public PayloadIF<Key, Value> put (Key key, PayloadIF<Key, Value> value)
+	public Value put (Key key, Value value, BiFunction<Key, Value, Wrapper> wrapper)
 	{
-		return cache.put(key,(Wrapper)value);
+		if (wrapper==null) wrapper=this::wrap;
+		final var w = wrapper.apply(key, value);
+		evictionManager.onBeforeWrite(cache, w);	
+		return unwrap(cache.put(key,w));
 	}
 
 	@Override
@@ -69,15 +61,19 @@ public class SimpleCacheManager<Key, Value, Wrapper extends PayloadIF<Key, Value
 	}
 
 	@Override
-	public PayloadIF<Key, Value> get (final Key key)
+	public Value get (final Key key)
 	{ 
-		return cache.get(key); 
+		final var w = cache.get(key);
+		evictionManager.onRead(cache, w);		
+		return unwrap(w);
 	}
 	
 	@Override
-	public PayloadIF<Key, Value> remove (Key key)
+	public Value remove (Key key)
 	{
-		return cache.remove(key);
+		final var w = cache.remove(key);
+		evictionManager.onDeletion(cache, w);
+		return unwrap(w);
 	}
 	
 	@Override
@@ -99,9 +95,22 @@ public class SimpleCacheManager<Key, Value, Wrapper extends PayloadIF<Key, Value
 		 return cache.keySet();
 	 }
 	 
-	 @SuppressWarnings("unchecked")
 	 @Override
- 	 public Collection<PayloadIF<Key, Value>> values() {
-	    return (Collection<PayloadIF<Key, Value>>)cache.values();	 
+ 	 public Set<Map.Entry<Key, Value>> entrySet() {
+		 Set<Map.Entry<Key, Value>> result = new HashSet<>();
+		 for (var entry: cache.entrySet())  {
+			 result.add(new AbstractMap.SimpleEntry<Key,Value>(entry.getKey(), unwrap(entry.getValue())));
+		 }
+		 return result;
+	 }
+	 
+	 @Override
+	 public Collection<Value> values ()
+	 {
+		 ArrayList<Value> result = new ArrayList<>(cache.size());
+		 for (var entry: cache.values())  {
+			 result.add(unwrap(entry));
+		 }
+		 return result;
 	 }
 }

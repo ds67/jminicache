@@ -1,6 +1,7 @@
 package ds67.jminicache.impl.eviction;
 
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import ds67.jminicache.impl.payload.ListWrapper;
 import ds67.jminicache.impl.payload.PayloadIF;
@@ -10,9 +11,11 @@ class ListEvictionManager<Key, Value, Wrapper extends ListWrapper<Key, Value, ? 
 	private Wrapper lastEntry = null;
 	private Wrapper firstEntry = null;
 	
-	ListEvictionManager (final BiFunction<Key, Value, Wrapper> constructor)
+	ListEvictionManager (final BiFunction<Key, Value, Wrapper> constructor,
+			             final Function<Wrapper, Value> unWrapper)
 	{
 		this.constructor=constructor;
+		this.unWrapper=unWrapper;
 	}
 	
 	protected void append (final Wrapper w)
@@ -39,9 +42,16 @@ class ListEvictionManager<Key, Value, Wrapper extends ListWrapper<Key, Value, ? 
 	}
 	
 	private final BiFunction<Key, Value, Wrapper> constructor;
+	private final Function<Wrapper, Value> unWrapper;
 	
 	public Wrapper createWrapper(Key k, Value v) {
 		return constructor.apply(k, v);
+	}
+	
+	public Value unwrap (Wrapper w)
+	{ 
+		if (w==null) return null;
+		return unWrapper.apply(w);
 	}
 	
 	protected Wrapper getFirstEntry ()

@@ -2,9 +2,11 @@ package ds67.jminicache;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -38,7 +40,7 @@ import ds67.jminicache.impl.storage.StorageManagerIF;
 public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Value>>
 {	
 	/**
-	 * Wrapper class to allow supply functions to return the 
+	 * Wrapper class to allow supply functions to return the expire date of the value
 	 * 
 	 * @author jens
 	 *
@@ -94,7 +96,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	
 	private final Map<Key,ReadWriteLock> creationGuards = new HashMap<>();
 	
-	private StorageManagerIF<Key, Value> manager;
+	private StorageManagerIF<Key, Value, ?> manager;
 
 	
 	/**
@@ -208,18 +210,14 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 		
 	protected void unsynchronized_set (final Key key, final Value value, final long expiry)
 	{
-		final var w = manager.createWrapper(key, value);
-
 		if (expiryManager!=null && expiry>0) {			
 			expiryManager.add(key, expiry);
 		}
 		
-		manager.onBeforeWrite(w);	
-		final var previousValue = manager.put(key, w);
-		
-				
+		final var previousValue = manager.put(key, value, null);
+						
 		if (publisher!=null) {
-			final Value oldValue = previousValue==null?null:previousValue.getPayload();
+			final Value oldValue = previousValue==null?null:previousValue;
 			publisher.submit (new CacheChangeEvent<Key, Value>(key, oldValue, value));		
 		}
 		unsynchronized_shrink();
@@ -264,13 +262,21 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 */
 	public void set (final Map<Key, Value> content, long expiryDate)
 	{
-		final var entries = content.entrySet();
-		
+		set(content.entrySet(), expiryDate);
+	}
+	
+	public void set (final Set<Map.Entry<Key, Value>> entries)
+	{
+		set(entries, 0l);
+	}
+	
+	public void set (final Set<Map.Entry<Key, Value>> entries, long expiryDate)
+	{	
 		guard.writeLocked(() -> {
 			int insertedInARow = 0;
 			for (final var entry: entries) {
 				unsynchronized_set(entry.getKey(), entry.getValue(), expiryDate);
-				if (++insertedInARow > 20) {
+				if (++insertedInARow > 100) {
 					insertedInARow=0;
 					// yield when readers are waiting
 					guard.yield();
@@ -307,8 +313,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	{
 		final var wrappedValue = manager.get(key);
 		if (wrappedValue==null) return null;
-		manager.onRead(wrappedValue);
-		return wrappedValue.getPayload();		
+		return wrappedValue;		
 	}
 	
 	/**
@@ -327,10 +332,9 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	protected Value unsynchronized_remove (Key key)
 	{
 		final var element = manager.remove(key);
-		manager.onDeletion(element);
 		if (expiryManager!=null) expiryManager.remove(key);
-		if (publisher!=null) publisher.submit (new CacheChangeEvent<Key, Value>(key, element.getPayload(), null));
-		return element.getPayload();		
+		if (publisher!=null) publisher.submit (new CacheChangeEvent<Key, Value>(key, element, null));
+		return element;		
 	}
 	
 	/**
@@ -385,7 +389,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 		if (maxSize<1) return;		
 		while (manager.cachesize()>maxSize) {
 			final var last = manager.getForDeletion();
-			if (last!=null) unsynchronized_remove(last.getKey());
+			if (last!=null) unsynchronized_remove(last);
 			else break;
 		}	
 	}
@@ -553,26 +557,70 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 		});
 	}
 	
-	public Collection<Value> values ()
+	protected <Wrapper> Collection<Wrapper> values (Function<Map.Entry<Key, Value>, Wrapper> wrapper)
 	{
 		return guard.readLocked(() -> {
-			final var values = new ArrayList<Value>(this.size()); 
-			for (var entry: manager.values()) values.add(entry.getPayload());
+			final var values = new ArrayList<Wrapper>(this.size()); 
+			for (var entry: manager.entrySet()) {
+				values.add(wrapper.apply(entry));
+			}
 			return values;
 		});
+	}
+	
+	public Collection<Value> values ()
+	{
+		return values((entry) -> entry.getValue());
 	}
 	
 	public Collection<ValueWithExpiry<Value>> valuesWithExpiryDate ()
 	{
 		// Define a lambda function to retrieve the expire time. If no expire manager exists its always 0, otherwise ask the expiryManager
 		final Function<Key, Long> getExpireTime = (expiryManager==null)?(key) -> 0L:(key) -> expiryManager.getExpiryTime(key);
-		
+
+		return values((entry) -> new ValueWithExpiry<Value>(entry.getValue(), getExpireTime.apply(entry.getKey())));
+	}
+	
+	protected <Wrapper> Set<Map.Entry<Key, Wrapper>> entrySet (Function<Map.Entry<Key, Value>, Wrapper> wrapper)
+	{
 		return guard.readLocked(() -> {
-			final var values = new ArrayList<ValueWithExpiry<Value>>(this.size()); 
-			for (var entry: manager.values()) {
-				values.add(new ValueWithExpiry<Value>(entry.getPayload(), getExpireTime.apply(entry.getKey())));
+			final var values = new HashSet<Map.Entry<Key, Wrapper>>(this.size()); 
+			for (var entry: manager.entrySet()) {
+				values.add(new AbstractMap.SimpleEntry<>(entry.getKey(),wrapper.apply(entry)));
 			}
 			return values;
+		});
+	}
+	
+	/**
+	 * Retrieves the key/value pair of all stored entries in the cache.  
+	 * 
+	 * @return entrySet of the cache
+	 */
+	public Set<Map.Entry<Key, Value>> entrySet ()
+	{
+		return entrySet((entry) -> entry.getValue());
+	}
+	
+	/**
+	 * Retrieves the key/value pair of all stored entries in the cache. The values are extended with the current known
+	 * expiry times.
+	 * If no expiry manager is installed all expiry times are set to 0.
+	 * 
+	 * Please note that this methods needs O(n*log(n)) processing time with n cached elements when a expire manager is in place
+	 * in contrast to the @see #entrySet() method.  
+	 * 
+	 * @see ValueWithExpiry
+	 * 
+	 * @return entrySet of the cache when the values are extended with the known expire dates
+	 */
+	public Set<Map.Entry<Key, ValueWithExpiry<Value>>> entrySetWithExpiryDate ()
+	{
+		// Define a lambda function to retrieve the expire time. If no expire manager exists its always 0, otherwise ask the expiryManager
+		final Function<Key, Long> getExpireTime = (expiryManager==null)?(key) -> 0L:(key) -> expiryManager.getExpiryTime(key);
+
+		return entrySet((entry) -> { 
+			return new ValueWithExpiry<Value>(entry.getValue(), getExpireTime.apply(entry.getKey())); 
 		});
 	}
 	
