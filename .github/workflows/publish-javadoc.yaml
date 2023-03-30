@@ -1,9 +1,11 @@
 name: Deploy Javadoc
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Maven Build"]
+    branches: [main]
+    types: 
+      - completed
 
 jobs:
   publish:
