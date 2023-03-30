@@ -93,9 +93,9 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *   
 	 *   @param supplier Function which will be called when the key is not found in the cache. The implementation will guarantee that the supplier method
 	 *   will be called only once for a certain key regardless how many parallel requests are made and how long the value retrieval takes. Waiting 
-	 *   {@link #get(Object, Supplier)} for the same key will return the provides value upon availability.
+	 *   {@link #get(Object, ValueSupplier)} for the same key will return the provides value upon availability.
 	 *   
-	 *   {@link #get(Object, Supplier)} calls with other keys will not be suspended will the value will be fetched.
+	 *   {@link #get(Object, ValueSupplier)} calls with other keys will not be suspended will the value will be fetched.
 	 *   
 	 *   When the supplier methods throws an exception this exception will be re thrown by the method. No insertion in the cache will take place. 
 	 *   
@@ -186,7 +186,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * Retrieves a cache value, if the key does not exists in the cache the provided supplier function is called to populate the cache
 	 * (without expiry date).
 	 * 
-	 * Simple version of {@link #get(Object, ValueSupplier, boolean)}
+	 * Simple version of {@link #get(Object, ValueSupplier)}
 	 * 
 	 * @param key
 	 * @param supplier
@@ -338,7 +338,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * 
 	 * Use this method in favor to the get methods when the cache fill is done in batch inserts.
 	 * 
-	 * @see #get(Key)
+	 * @see #get(Object)
 	 * 
 	 * @param key
 	 * @return
