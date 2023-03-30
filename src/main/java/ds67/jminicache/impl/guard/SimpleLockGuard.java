@@ -25,13 +25,18 @@ public class SimpleLockGuard implements GuardIF {
 	}
 
 	@Override
-	public void unlock() {
+	public void yield ()
+	{
+	}
+
+	@Override
+	public void unlockRead() {
 		guard.unlock();
 	}
 
 	@Override
-	public void yield ()
-	{
+	public void unlockWrite() {
+		guard.unlock();
 	}
 
 }

@@ -83,9 +83,10 @@ public class ExpiryManager<Key> {
 
 		if (nextExpireDate!=newNextExpireDate) {
 			if (nextExecution!=null) nextExecution.cancel(false);
-			final long delay = nextExpireDate-System.currentTimeMillis();
+			final long delay = newNextExpireDate-System.currentTimeMillis();
 			nextExecution = scheduler.schedule(this::deleteOldestEntry, delay>0?delay:0, TimeUnit.MILLISECONDS);
 			nextExpireDate=newNextExpireDate;
+			System.out.println ("Next expiry scheduled with delay "+delay+" ms");
 		}
 	}
 	

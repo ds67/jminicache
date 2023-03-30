@@ -1,4 +1,4 @@
-# jminicache
+# jminicache (Version 0.0.0) - not yet useful
 Small but fast memory cache of arbitrary objects
 
 # Usage

@@ -26,18 +26,22 @@ public class ReadWriteGuard implements GuardIF  {
 	}
 
 	@Override
-	public void unlock() {
-		if (guard.isWriteLocked()) guard.writeLock().unlock();
-		else guard.readLock().unlock();
-	}
-
-	@Override
 	public void yield ()
 	{
 		if (guard.hasQueuedThreads()) {
 			guard.writeLock().unlock();
 			guard.writeLock().lock();
 		}
+	}
+
+	@Override
+	public void unlockRead() {
+		guard.readLock().unlock();		
+	}
+
+	@Override
+	public void unlockWrite() {
+		guard.writeLock().unlock();
 	}
 	
 }

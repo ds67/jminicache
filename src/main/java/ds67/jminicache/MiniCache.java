@@ -1,7 +1,5 @@
 package ds67.jminicache;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,14 +13,15 @@ import java.util.concurrent.Flow.Subscriber;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import ds67.jminicache.CachePolicy.Category;
+import ds67.jminicache.impl.ManagerFactory;
 import ds67.jminicache.impl.guard.GuardIF;
+import ds67.jminicache.impl.guard.LocalGuard;
 import ds67.jminicache.impl.storage.ExpiryManager;
 import ds67.jminicache.impl.storage.StorageManagerIF;
 
@@ -39,37 +38,23 @@ import ds67.jminicache.impl.storage.StorageManagerIF;
  */
 public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Value>>
 {	
+	
 	/**
-	 * Wrapper class to allow supply functions to return the expire date of the value
+	 * Interface similar to the {@link Supplier} interface of the java language with the extension to throw a exception
+	 * If no exceptions is needed its silently skipped. Unfortunately just one exception type can be returned.
 	 * 
+	 * However this enables your code to provide a supplier to the {@link MiniCache#get(Object, ValueSupplier) method
+	 * with may throw an exception. The exception is than rethrown by the get method to allow used defined exception 
+	 * handling outside of the lambda context. 
+	 *  
 	 * @author jens
 	 *
-	 * @param <Value>
+	 * @param <Value> Value type which is returned by the supplier 
+	 * @param <E> Exception to throw
 	 */
-	static public class ValueWithExpiry<Value>
+	public interface ValueSupplier<Value, E extends Throwable>
 	{
-		final private Value value;
-		final private long expiry;
-		
-		ValueWithExpiry (Value value)
-		{
-			this.value=value;
-			this.expiry=0;
-		}
-		
-		ValueWithExpiry (Value value, long expiry)
-		{
-			this.value=value;
-			this.expiry=expiry;
-		}
-
-		public Value getValue() {
-			return value;
-		}
-
-		public long getExpiry() {
-			return expiry;
-		}
+		Value get() throws E;
 	}
 	
 	private ExpiryManager<Key> expiryManager = null;
@@ -135,11 +120,13 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *   }
 	 *   }</pre>
 	 */
-	public Value get (final Key key, Supplier<ValueWithExpiry<Value>> supplier) throws Exception
+	public <E extends Throwable> Value get (final Key key, ValueSupplier<ValueWithExpiry<Value>, E> supplier) throws E
 	{
+		LocalGuard lGuard = new LocalGuard(guard);
+		
 		try {
-			guard.lockRead();
-			final var available_value = unsynchronized_fetch(key);
+			lGuard.lockRead();
+			var available_value = unsynchronized_fetch(key);
 			if (available_value!=null) {
 				return available_value;
 			}
@@ -149,11 +136,18 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 				return null;
 			}
 			
-			guard.promoteLock();
-		
+			lGuard.promoteLock();
+			// Recheck if value is already there. Between last check and lock promotion somebody else might
+			// have inserted the key.
+			available_value = unsynchronized_fetch(key);
+			if (available_value!=null) {
+				return available_value;
+			}
+			
 			var localGuard = creationGuards.get(key);
 			if (localGuard!=null) {
 				// somebody else called supplier, simple wait until finished
+				lGuard.unlock();
 				try {
 					localGuard.readLock().lock();
 					return get(key, supplier);
@@ -168,12 +162,12 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 				creationGuards.put(key, localGuard);
 			}
 			
-			guard.unlock ();
+			lGuard.unlock ();
 		
 			try {
 				final var result = supplier.get();
 				
-				guard.lockWrite();
+				lGuard.lockWrite();
 				unsynchronized_set(key,result.getValue(),result.getExpiry());
 				return result.getValue();
 			}
@@ -184,7 +178,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 		}
 		finally 
 		{
-			guard.unlock();
+			lGuard.unlock();
 		}
 	}
 	
@@ -192,19 +186,19 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * Retrieves a cache value, if the key does not exists in the cache the provided supplier function is called to populate the cache
 	 * (without expiry date).
 	 * 
-	 * Simple version of {@link #get(Object, Supplier, boolean)}
+	 * Simple version of {@link #get(Object, ValueSupplier, boolean)}
 	 * 
 	 * @param key
 	 * @param supplier
-	 * @param expireDate timestamp when the entry will expire
+	 * @param expireDate timestamp in milliseconds when the entry will expire
      *
-	 * @return retrieved value from cache
+	 * @return retrieved value from cache or newly generated value when not existed
 	 * @throws Exception
 	 */
-	public Value get (final Key key, Supplier<Value> supplier, long expireDate) throws Exception
+	public <E extends Throwable> Value get (final Key key, ValueSupplier<Value,E> supplier, long expireDate) throws E 
 	{
 		return this.get(key, () -> {
-			return new ValueWithExpiry<Value>(supplier.get(), expireDate);
+			return ValueWithExpiry.of(supplier.get(), expireDate);
 		});
 	}
 		
@@ -234,6 +228,11 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	public void set (final Key key, final Value value)	
 	{
 		guard.writeLocked(() -> unsynchronized_set(key,value,0));
+	}
+	
+	public void set (final Key key, final ValueWithExpiry<Value> ve)	
+	{
+		guard.writeLocked(() -> unsynchronized_set(key,ve.getValue(),ve.getExpiry()));
 	}
 	
 	/**
@@ -284,6 +283,24 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 			}			
 		});
 	}	
+	
+	public void set (final Map<Key, ValueWithExpiry<Value>> content)
+	{
+		final var entries = content.entrySet();
+		
+		guard.writeLocked(() -> {
+			int insertedInARow = 0;
+			for (final var entry: entries) {
+				unsynchronized_set(entry.getKey(), entry.getValue().getValue(), entry.getValue().getExpiry());
+				if (++insertedInARow > 20) {
+					insertedInARow=0;
+					// yield when readers are waiting
+					guard.yield();
+				}
+			}			
+		});
+	}
+
 
 	/**
 	 * Retrieves an existing value from the cache. 
@@ -321,6 +338,8 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * 
 	 * Use this method in favor to the get methods when the cache fill is done in batch inserts.
 	 * 
+	 * @see #get(Key)
+	 * 
 	 * @param key
 	 * @return
 	 */
@@ -355,6 +374,11 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	{
 		return guard.readLocked(manager::cachesize);
 	}
+	
+	public boolean isEmpty ()
+	{
+		return guard.readLocked(() -> manager.cachesize()==0);
+	}
 
 	/**
 	 * Checks if a key is contained in the cache
@@ -379,7 +403,9 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 */
 	public MiniCache<Key, Value> setMaxSize (int maxSize)
 	{
-		this.maxSize=maxSize;
+		synchronized (this) {
+			this.maxSize=maxSize;
+		}
 		shrink();
 		return this;
 	}
@@ -424,21 +450,40 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * @param valueFactory
 	 * @return this object to provide a builder like interface
 	 */
-	public MiniCache<Key, Value> setValueWithExpiryFactory (final Function<Key,ValueWithExpiry<Value>> valueFactory)
+	public synchronized MiniCache<Key, Value> setValueWithExpiryFactory (final Function<Key,ValueWithExpiry<Value>> valueFactory)
 	{
 		this.valueWithExpiryFactory=valueFactory;
 		this.valueFactory=null;
 		return this;
 	}
 	
-	public MiniCache<Key, Value> setValueFactory (final Function<Key,Value> valueFactory)
+	public synchronized MiniCache<Key, Value> setValueFactory (final Function<Key,Value> valueFactory)
 	{
-		this.valueFactory=valueFactory;
-		valueWithExpiryFactory=null;
+		guard.writeLocked(() -> {
+			this.valueFactory=valueFactory;
+			valueWithExpiryFactory=null;
+		});
 		return this;
 	}
 	
-	public MiniCache<Key, Value> setRefreshMethod (final Function<Key,ValueWithExpiry<Value>> refreshMethod)
+	/**
+	 * Installes a method which will be called when cache entries are expired.
+	 * This method is called with the expired key as argument and mus return a {@link ValueWithExpiry} object.
+	 * The new object might also be unlimited valid.
+	 * 
+	 * Please note that the refresh method is executed in the context of the scheduler threads. If you have many items 
+	 * waiting for refreshment you should consider installing an own multithreaded scheduler to handle all requests
+	 * near real time.
+	 * The existing item is replaced when a new value is available. Therefore, when refreshing is slow, the old value will be
+	 * visible further than the expire date.  
+	 * 
+	 * @see #setSchedulerService(ScheduledExecutorService)
+	 * @see #getSchedulerService()
+	 * 
+	 * @param refreshMethod method to refresh a key or <code>null</code> to stop refreshing a remove keys again.
+	 * @return the current object to allow method chaining
+	 */
+	public synchronized MiniCache<Key, Value> setRefreshMethod (final Function<Key,ValueWithExpiry<Value>> refreshMethod)
 	{
 		if (refreshMethod==null) expiryManager.setDeletionTrigger(this::remove);
 		else expiryManager.setDeletionTrigger((key) -> {
@@ -453,7 +498,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *  
 	 * @return the installed value factory or null if non is installed
 	 */
-	public Function<Key,Value> getValueFactory ()
+	public synchronized Function<Key,Value> getValueFactory ()
 	{
 		return this.valueFactory;
 	}
@@ -463,7 +508,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *  
 	 * @return the installed value factory or null if non is installed
 	 */
-	public Function<Key,ValueWithExpiry<Value>> getValueWithExpiryFactory ()
+	public synchronized Function<Key,ValueWithExpiry<Value>> getValueWithExpiryFactory ()
 	{
 		return this.valueWithExpiryFactory;
 	}
@@ -507,54 +552,6 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	public void readLocked (Runnable f)
 	{
 		guard.readLocked(f);
-	}
-	
-	/* **********************************************************************************************************************************
-	 * 
-	 * Specializations for expiry duration, so that different timespans can be given
-	 * 
-	 ************************************************************************************************************************************/
-	
-	/**
-	 * Adds a value to the cache with lifetime
-	 * 
-	 * @param key lookup key of the value
-	 * @param value value to add
-	 * @param delay delay how long the value remains valid
-	 * @param TimeUnit timeunit of the delay
-	 */
-	public void set (final Key key, final Value value, long delay, TimeUnit unit)	
-	{
-		this.set(key,value,System.currentTimeMillis()+unit.toMillis(delay));
-	}
-
-	/**
-	 * Adds a value to the cache with a expiry date
-	 * 
-	 * @param key lookup key of the value
-	 * @param value value to add
-	 * @param expiryDate Date when the value will expire
-	 */
-	public void set (final Key key, final Value value, LocalDateTime expiryDate)	
-	{
-		this.set(key,value,expiryDate==null?0:expiryDate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
-	}
-	
-	public void set (final Map<Key, ValueWithExpiry<Value>> content)
-	{
-		final var entries = content.entrySet();
-		
-		guard.writeLocked(() -> {
-			int insertedInARow = 0;
-			for (final var entry: entries) {
-				unsynchronized_set(entry.getKey(), entry.getValue().getValue(), entry.getValue().getExpiry());
-				if (++insertedInARow > 20) {
-					insertedInARow=0;
-					// yield when readers are waiting
-					guard.yield();
-				}
-			}			
-		});
 	}
 	
 	protected <Wrapper> Collection<Wrapper> values (Function<Map.Entry<Key, Value>, Wrapper> wrapper)
@@ -630,6 +627,38 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 */
 	private static ScheduledExecutorService scheduler = null;
 	
+	/**
+	 * Returns true when a scheduler instance was already created.
+	 * If not, a default scheduled service is installed by calling {@link #getSchedulerService()}. 
+	 * This is usually done internally. Thus, when you'd like to know if the default or yours customer
+	 * scheduler is used, have a logic like
+	 * 
+	 * <pre>{@code
+	 *    MiniCache <?,?> cache;
+	 *    if (cache.hasSchedulerService && cache.getSchedulerService()==myScheduler) {
+	 *       ...
+	 *    }
+	 * }</pre>
+	 * 
+	 * @see #getSchedulerService()
+	 * @see #setSchedulerService(ScheduledExecutorService)
+	 * 
+	 * @return <code>true</code> when a scheduler is already installed, <code>false</code> otherwise
+	 */
+	public static boolean hasSchedulerService ()
+	{
+		return scheduler!=null;
+	}
+	
+	/**
+	 * Gets the used scheduler service. If none is is set yet a new default scheduler is created.
+	 * The default scheduler uses a single thread named "Minicache expiry scheduler".
+	 * 
+	 * @see #setSchedulerService(ScheduledExecutorService)
+	 * @see #hasSchedulerService()
+	 * 
+	 * @return the used scheduler service. If none was there a new thread is created
+	 */
 	public static ScheduledExecutorService getSchedulerService ()
 	{
 		if (scheduler==null) {
@@ -638,7 +667,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 				public Thread newThread(Runnable r) {
 				       final Thread t = Executors.defaultThreadFactory().newThread(r);
 		               t.setDaemon(true);
-		               t.setName("Minicache Expiryscheduler");
+		               t.setName("Minicache expiry scheduler");
 		               return t;
 				}
 			});
@@ -646,6 +675,19 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 		return scheduler;
 	}
 	
+	/**
+	 * Sets a new global scheduler service for the caches. This scheduler is used to schedule expire dates and remove 
+	 * cached entries in time. If no customer scheduler is the cache instances will use an own scheduler powered by a 
+	 * single thread. 
+	 * 
+	 * If there was already a scheduler service installed already created {@link MiniCache} instances keep using 
+	 * their assigned scheduler. It will not be exchanged with the new global scheduler.
+	 * 
+	 * @see #getSchedulerService()
+	 * @see #hasSchedulerService()
+	 * 
+	 * @param scheduler scheduler which served the expire actions
+	 */
 	public static void setSchedulerService (final ScheduledExecutorService scheduler)
 	{
 		MiniCache.scheduler = scheduler;

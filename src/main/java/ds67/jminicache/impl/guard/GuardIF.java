@@ -26,15 +26,14 @@ public interface GuardIF {
 	 */
 	public void lockWrite ();
 	
+	public void unlockRead ();
+	
+	public void unlockWrite ();
+	
 	/**
 	 * Promoted an existing read lock to an write lock. Might wait until other readers unlock. 
 	 */
 	public void promoteLock();
-	
-	/**
-	 * Unlocks the current lock. 
-	 */
-	public void unlock ();
 	
 	/**
 	 * Can be called when there is a long lasting lock. When other threads wait for lock aquiring these threads will be
@@ -59,7 +58,7 @@ public interface GuardIF {
 			f.run();
 		}
 		finally {
-			unlock();
+			unlockRead();
 		}
 	}
 	
@@ -78,7 +77,7 @@ public interface GuardIF {
 			return f.get();
 		}
 		finally {
-			unlock();
+			unlockRead();
 		}
 	}
 	
@@ -97,7 +96,7 @@ public interface GuardIF {
 			return f.get();
 		}
 		finally {
-			unlock();
+			unlockWrite();
 		}
 	}
 	
@@ -114,7 +113,7 @@ public interface GuardIF {
 			f.run();
 		}
 		finally {
-			unlock();
+			unlockWrite();
 		}
 	}
 }

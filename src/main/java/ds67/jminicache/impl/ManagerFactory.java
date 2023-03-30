@@ -1,5 +1,6 @@
-package ds67.jminicache;
+package ds67.jminicache.impl;
 
+import ds67.jminicache.CachePolicy;
 import ds67.jminicache.impl.eviction.FIFOManager;
 import ds67.jminicache.impl.eviction.LRUManager;
 import ds67.jminicache.impl.eviction.NoopManager;
@@ -15,7 +16,6 @@ import ds67.jminicache.impl.storage.SoftManager;
 public class ManagerFactory {
 
 	public ManagerFactory() {
-		// TODO Auto-generated constructor stub
 	}
 
 	public static <Key, Value> StorageManagerIF<Key, Value, ?> createCacheManager (final boolean soft, final CachePolicy policy)
