@@ -1,3 +1,3 @@
-module jminicache {
-	exports ds67.jminicache;
+module com.github.ds67.jminicache {
+	exports com.github.ds67.jminicache;
 }
