@@ -118,17 +118,15 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *   
 	 * @see #fetch(Object)
 	 *   
+	 * @param <E> Exception type the supplier function returns. Works also fine when the supplier does not return an exception.
+	 *   
 	 * @param key key by which the desired value can be found. The key can be any object which provides a well defined {@link #hashCode()}
 	 *   and {@link #equals(Object)} method. 
 	 *   
 	 * @param supplier Function which will be called when the key is not found in the cache. The implementation will guarantee that the supplier method
 	 *   will be called only once for a certain key regardless how many parallel requests are made and how long the value retrieval takes. Waiting 
 	 *   {@link #get(Object, ValueSupplier)} for the same key will return the provides value upon availability.
-	 *   
-	 * @param supplier Function which will be called when the key is not found in the cache. The implementation will guarantee that the supplier method
-	 *   will be called only once for a certain key regardless how many parallel requests are made and how long the value retrieval takes. Waiting 
-	 *   {@link #get(Object, ValueSupplier)} for the same key will return the provides value upon availability.
-	 *           
+	 *            
 	 * @return Value which was retrieved from the cache. As a supplier is provided it is guranteed that a value is returned. However, when the supplier
 	 *               provides a <code>null</code> this is cached and returned.
 	 *                   
