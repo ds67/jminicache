@@ -47,9 +47,7 @@ public interface GuardIF {
 	 * Executes a supplied function in a read locked context. Ensures that the lock is released after the function is called even when
 	 * exceptions occur.
 	 * 
-	 * @param <R> Return type of the supplied function
 	 * @param f function which is called in a read lock context
-	 * @return the result of the supplier function f
 	 */
 	default public void readLocked (Runnable f)
 	{
