@@ -34,7 +34,8 @@ import com.github.ds67.jminicache.impl.storage.StorageManagerIF;
  *  
  * @author Jens Ketterer
  *
- * @param <Value>
+ * @param <Key> Type of the access key of the cached items
+ * @param <Value> Type of the cached item
  */
 public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Value>>
 {	
@@ -43,7 +44,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * Interface similar to the {@link Supplier} interface of the java language with the extension to throw a exception
 	 * If no exceptions is needed its silently skipped. Unfortunately just one exception type can be returned.
 	 * 
-	 * However this enables your code to provide a supplier to the {@link MiniCache#get(Object, ValueSupplier) method
+	 * However this enables your code to provide a supplier to the {@link MiniCache#get(Object, ValueSupplier)} method
 	 * with may throw an exception. The exception is than rethrown by the get method to allow used defined exception 
 	 * handling outside of the lambda context. 
 	 *  
@@ -119,6 +120,15 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *       };
 	 *   }
 	 *   }</pre>
+	 *   
+	 * @param <E> Exception which is thrown by the Suppier Method. Unfortenately only one exception type can be returned 
+	 *            in a generic signature.
+	 * @param key Get to which the value should be fetched
+	 * @param supplier Function which is called only when the key is not found in the cache to provided the necessary value. 
+	 *                 It is guaranteed that the supplier is called only once even when multiple threads request the same key
+	 *                 from the cache at the same time. 
+	 *                   
+	 * @throws <E> Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
 	 */
 	public <E extends Throwable> Value get (final Key key, ValueSupplier<ValueWithExpiry<Value>, E> supplier) throws E
 	{
@@ -188,12 +198,18 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * 
 	 * Simple version of {@link #get(Object, ValueSupplier)}
 	 * 
-	 * @param key
-	 * @param supplier
+	 * @param <E> Exception which is thrown by the Suppier Method. Unfortenately only one exception type can be returned 
+	 *            in a generic signature.	 
+	 * @param key Get to which the value should be fetched
+	 * @param supplier Function which is called only when the key is not found in the cache to provided the necessary value. 
+	 *                 It is guaranteed that the supplier is called only once even when multiple threads request the same key
+	 *                 from the cache at the same time. 
 	 * @param expireDate timestamp in milliseconds when the entry will expire
      *
 	 * @return retrieved value from cache or newly generated value when not existed
-	 * @throws Exception
+	 * 
+	 * @throws <E> Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
+	 * 
 	 */
 	public <E extends Throwable> Value get (final Key key, ValueSupplier<Value,E> supplier, long expireDate) throws E 
 	{
@@ -313,9 +329,9 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * 
 	 * @param key key for which the value should be retrieved
 	 * @return The retrieved value or null when the key does not exists in the cache.
-	 * @throws Exception
+	 * @throws <E> Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
 	 */
-	public Value get (final Key key) throws Exception
+	public <E extends Throwable> Value get (final Key key) throws E
 	{	
 		if (valueWithExpiryFactory!=null) {
 			return get(key, () -> valueWithExpiryFactory.apply(key));
@@ -335,13 +351,14 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	
 	/**
 	 * Fetches a value from the cache without creating values, even when a valueFactory method is set
+	 * Will return a <code>null</code> value when the requested key is not cached.
 	 * 
 	 * Use this method in favor to the get methods when the cache fill is done in batch inserts.
 	 * 
 	 * @see #get(Object)
 	 * 
-	 * @param key
-	 * @return
+	 * @param key key for which the value should be retrieved
+	 * @return Value item which is stored for the key or <code>null</code> when nothing is stored.
 	 */
 	public Value fetch (final Key key) 
 	{

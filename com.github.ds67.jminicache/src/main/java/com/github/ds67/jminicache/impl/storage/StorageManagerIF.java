@@ -15,8 +15,8 @@ import com.github.ds67.jminicache.impl.guard.GuardIF;
  * 
  * @author Jens Ketterer
  *
- * @param <Key>
- * @param <Value>
+ * @param <Key> Type of the key to access the cached items
+ * @param <Value> Type of the cached item
  */
 public interface StorageManagerIF<Key, Value, Wrapper>
 {

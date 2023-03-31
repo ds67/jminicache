@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
  * 
  * @author jens
  *
- * @param <Value>
+ * @param <Value> Type of the cached items. 
  */
 public class ValueWithExpiry<Value>
 {

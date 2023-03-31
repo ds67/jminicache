@@ -10,8 +10,8 @@ import java.util.Map;
  * 
  * @author jens
  *
- * @param <Key>
- * @param <Value>
+ * @param <Key> Type of the key to access the cached items
+ * @param <Value> Type of the cached item
  */
 public class NoopManager<Key, Value> implements EvictionManagerIF<Key, Value, Value> {
 
