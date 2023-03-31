@@ -34,7 +34,9 @@ import com.github.ds67.jminicache.impl.storage.StorageManagerIF;
  *  
  * @author Jens Ketterer
  *
- * @param <Key> Type of the access key of the cached items
+ * @param <Key> Type of the access key of the cached items. A key should not be muted after usage in the cache. 
+ *              It must provide a working {@link Object#equals(Object)} and {@link Object#hashCode()} implementation. 
+ *             
  * @param <Value> Type of the cached item
  */
 public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Value>>
@@ -121,14 +123,21 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 *   }
 	 *   }</pre>
 	 *   
+	 * @see #fetch(Object)
+	 *   
 	 * @param <E> Exception which is thrown by the Suppier Method. Unfortenately only one exception type can be returned 
 	 *            in a generic signature.
-	 * @param key Get to which the value should be fetched
-	 * @param supplier Function which is called only when the key is not found in the cache to provided the necessary value. 
-	 *                 It is guaranteed that the supplier is called only once even when multiple threads request the same key
-	 *                 from the cache at the same time. 
+	 * @param key key by which the desired value can be found. The key can be any object which provides a well defined {@link #hashCode()}
+	 *   and {@link #equals(Object)} method. 
+	 *   
+	 * @param supplier Function which will be called when the key is not found in the cache. The implementation will guarantee that the supplier method
+	 *   will be called only once for a certain key regardless how many parallel requests are made and how long the value retrieval takes. Waiting 
+	 *   {@link #get(Object, ValueSupplier)} for the same key will return the provides value upon availability.
+	 *           
+	 * @return Value which was retrieved from the cache. As a supplier is provided it is guranteed that a value is returned. However, when the supplier
+	 *               provides a <code>null</value> this is cached and returned.
 	 *                   
-	 * @throws <E> Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
+	 * @throws E Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
 	 */
 	public <E extends Throwable> Value get (final Key key, ValueSupplier<ValueWithExpiry<Value>, E> supplier) throws E
 	{
@@ -200,15 +209,19 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * 
 	 * @param <E> Exception which is thrown by the Suppier Method. Unfortenately only one exception type can be returned 
 	 *            in a generic signature.	 
-	 * @param key Get to which the value should be fetched
-	 * @param supplier Function which is called only when the key is not found in the cache to provided the necessary value. 
-	 *                 It is guaranteed that the supplier is called only once even when multiple threads request the same key
-	 *                 from the cache at the same time. 
+	 * 
+	 * @param key key by which the desired value can be found. The key can be any object which provides a well defined {@link #hashCode()}
+	 *   and {@link #equals(Object)} method. 
+	 *   
+	 * @param supplier Function which will be called when the key is not found in the cache. The implementation will guarantee that the supplier method
+	 *   will be called only once for a certain key regardless how many parallel requests are made and how long the value retrieval takes. Waiting 
+	 *   {@link #get(Object, ValueSupplier)} for the same key will return the provides value upon availability.
+
 	 * @param expireDate timestamp in milliseconds when the entry will expire
      *
 	 * @return retrieved value from cache or newly generated value when not existed
 	 * 
-	 * @throws <E> Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
+	 * @throws E Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
 	 * 
 	 */
 	public <E extends Throwable> Value get (final Key key, ValueSupplier<Value,E> supplier, long expireDate) throws E 
@@ -326,12 +339,12 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * If no value factory is set the method behaves like the {@link #fetch(Object)} method. 
 	 * 
 	 * @see #setValueFactory(Function)
+	 * @see #setValueWithExpiryFactory(Function)
 	 * 
 	 * @param key key for which the value should be retrieved
 	 * @return The retrieved value or null when the key does not exists in the cache.
-	 * @throws <E> Exception the supplier function throws. It is simply rethrown after cleanup of the get function.
 	 */
-	public <E extends Throwable> Value get (final Key key) throws E
+	public Value get (final Key key) 
 	{	
 		if (valueWithExpiryFactory!=null) {
 			return get(key, () -> valueWithExpiryFactory.apply(key));
@@ -455,7 +468,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * Sets a value factory function for the cache.
 	 * 
 	 * The value factory generates from a given key the corresponding value. It is called when the requested key is not found in the cache.
-	 * The generated value is then stored in the cache and returned from the function. Set teh value factory to null to delete an currently
+	 * The generated value is then stored in the cache and returned from the function. Set the value factory to null to delete an currently
 	 * installed factory.
 	 * 
 	 * Be aware that the value factory function must be reentrant. That means that it might be called for different key in parallel. However
@@ -464,7 +477,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	 * @see #get(Object)
 	 * @see #getValueFactory()
 	 * 
-	 * @param valueFactory
+	 * @param valueFactory supplier function which takes a key object and produced the cachable item of type Value
 	 * @return this object to provide a builder like interface
 	 */
 	public synchronized MiniCache<Key, Value> setValueWithExpiryFactory (final Function<Key,ValueWithExpiry<Value>> valueFactory)
