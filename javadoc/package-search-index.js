@@ -1,0 +1,1 @@
+packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"com.github.ds67.jminicache"},{"l":"com.github.ds67.jminicache.impl"},{"l":"com.github.ds67.jminicache.impl.eviction"},{"l":"com.github.ds67.jminicache.impl.guard"},{"l":"com.github.ds67.jminicache.impl.payload"},{"l":"com.github.ds67.jminicache.impl.storage"}]
