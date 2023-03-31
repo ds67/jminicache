@@ -19,4 +19,4 @@ jobs:
           java-version: 11
           target-folder: javadoc 
           subdirectories: com.github.ds67.jminicache
-          custom-command: javadoc -d javadoc -sourcepath com.github.ds67.jminicache/src/main/java 
+          custom-command: javadoc -d javadoc -sourcepath com.github.ds67.jminicache/src/main/java -subpackages com.github.ds67.jminicache
