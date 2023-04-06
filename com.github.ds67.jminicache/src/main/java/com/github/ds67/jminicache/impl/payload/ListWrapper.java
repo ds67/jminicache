@@ -13,8 +13,8 @@ public class ListWrapper<Key, Payload, Wrapper extends PayloadIF<Key, Payload>> 
 	
 	public void onRemove ()
 	{
-		if (this.pred!=null) this.pred.succ=this.succ;
-		if (this.succ!=null) this.succ.pred=this.pred;
+		if (this.pred!=null) this.pred.setSucc(this.getSucc());
+		if (this.succ!=null) this.succ.setPred(this.getPred());
 	}
 
 	public ListWrapper<Key, Payload, Wrapper> getPred() {

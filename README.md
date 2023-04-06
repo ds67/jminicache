@@ -9,6 +9,8 @@ The created cache object is fully multithreaded. Read operations are done in par
 
 Then consider the upate and the removal policies.
 
+See https://ds67.github.io/jminicache/javadoc/ for API documentation
+
 ## Update policies
 
 There are different update policies. Choose the appropriate methods by your needs. Different provider methods can be combined.

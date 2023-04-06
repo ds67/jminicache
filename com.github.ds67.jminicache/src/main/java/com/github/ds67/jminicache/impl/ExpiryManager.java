@@ -1,4 +1,4 @@
-package com.github.ds67.jminicache.impl.storage;
+package com.github.ds67.jminicache.impl;
 
 import java.util.ArrayList;
 import java.util.Collection;

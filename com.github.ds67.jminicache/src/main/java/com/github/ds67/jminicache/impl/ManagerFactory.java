@@ -1,5 +1,10 @@
 package com.github.ds67.jminicache.impl;
 
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.HashMap;
+import java.util.function.Supplier;
+
 import com.github.ds67.jminicache.CachePolicy;
 import com.github.ds67.jminicache.impl.eviction.FIFOManager;
 import com.github.ds67.jminicache.impl.eviction.LRUManager;
@@ -9,7 +14,7 @@ import com.github.ds67.jminicache.impl.guard.SimpleLockGuard;
 import com.github.ds67.jminicache.impl.payload.KeySoftValuePayload;
 import com.github.ds67.jminicache.impl.payload.KeyValuePayload;
 import com.github.ds67.jminicache.impl.payload.ListWrapper;
-import com.github.ds67.jminicache.impl.storage.SimpleCacheManager;
+import com.github.ds67.jminicache.impl.storage.MapBasedCacheManager;
 import com.github.ds67.jminicache.impl.storage.SoftManager;
 import com.github.ds67.jminicache.impl.storage.StorageManagerIF;
 
@@ -18,9 +23,19 @@ public class ManagerFactory {
 	public ManagerFactory() {
 	}
 
-	public static <Key, Value> StorageManagerIF<Key, Value, ?> createCacheManager (final boolean soft, final CachePolicy policy)
+	private static <Key, Wrapper> Supplier<Map<Key,Wrapper>> mapCreatorFunction (CachePolicy.ParsedPolicies policies)
 	{
-		if (soft==false && policy==CachePolicy.EVICTION_LRU) {
+		if (policies.getTreeStoragePolicy()==CachePolicy.TREE_MAP_STORAGE) {
+			return () -> new TreeMap<Key,Wrapper>();
+		}
+		else {
+			return () -> new HashMap<Key,Wrapper>(); 
+		}
+	}
+
+	public static <Key, Value> StorageManagerIF<Key, Value, ?> createCacheManager (CachePolicy.ParsedPolicies policies)
+	{
+		if (!policies.isUseWeakKeys() && policies.getEvictionPolicy().equals(CachePolicy.EVICTION_LRU)) {
 			final var lruEvictionManager = new LRUManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(
 				// function to wrap	
 				(k,v) -> {
@@ -30,11 +45,11 @@ public class ManagerFactory {
 				(w) -> w.getPayload()
 			);
 			
-			return new SimpleCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(new SimpleLockGuard(), lruEvictionManager);
+			return new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(mapCreatorFunction(policies), new SimpleLockGuard(), lruEvictionManager);
 		}
-		else if (soft==true && policy==CachePolicy.EVICTION_LRU) {
+		else if (policies.isUseWeakKeys() && policies.getEvictionPolicy().equals(CachePolicy.EVICTION_LRU)) {
 			final var lruEvictionManager = new LRUManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(null, null);
-			final var cacheManager = new SimpleCacheManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(new SimpleLockGuard(),  lruEvictionManager);
+			final var cacheManager = new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(mapCreatorFunction(policies), new SimpleLockGuard(),  lruEvictionManager);
 			
 			return new SoftManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(
 					cacheManager, 
@@ -48,7 +63,7 @@ public class ManagerFactory {
 					}
 			);
 		}
-		else if (soft==false && policy==CachePolicy.EVICTION_FIFO) {
+		else if (!policies.isUseWeakKeys() && policies.getEvictionPolicy().equals(CachePolicy.EVICTION_FIFO)) {
 			final var evictionManager = new FIFOManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(
 				// Function to wrap the payload	
 				(k,v) -> {
@@ -60,12 +75,30 @@ public class ManagerFactory {
 				}
 			);
 			
-			return new SimpleCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(new ReadWriteGuard(), evictionManager);
+			return new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(mapCreatorFunction(policies), new ReadWriteGuard(), evictionManager);
 		}
-		else if (soft==false && policy==CachePolicy.EVICTION_NONE) {
-			final var evictionManager = new NoopManager<Key, Value>();
+		else if (policies.getEvictionPolicy().equals(CachePolicy.EVICTION_NONE)) {
 			
-			return new SimpleCacheManager<Key, Value, Value>(new ReadWriteGuard(), evictionManager);
+			if (policies.isUseWeakKeys()) {
+		    	final var evictionManager = new NoopManager<Key, Value, KeySoftValuePayload<Key,Value>>(null, null);	    	
+				final var cacheManager = new MapBasedCacheManager<Key, Value, KeySoftValuePayload<Key,Value>>(mapCreatorFunction(policies), new ReadWriteGuard(),  evictionManager);
+				
+				return new SoftManager<Key, Value, KeySoftValuePayload<Key,Value>>(
+						cacheManager, 
+						// Function to wrap the payload
+						(k,v,q) -> {
+							return new KeySoftValuePayload<Key,Value>(k,v,q);
+						},
+						// function to unwrap the payload
+						(w) -> {
+							return w.getPayload();
+						}
+				);
+			}
+		    else {
+				final var evictionManager = NoopManager.<Key, Value>ofIdentity();
+				return new MapBasedCacheManager<Key, Value, Value>(mapCreatorFunction(policies), new ReadWriteGuard(), evictionManager);
+		    }
 		}
 		
 		return null;

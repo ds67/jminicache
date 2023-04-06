@@ -19,10 +19,12 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import com.github.ds67.jminicache.CachePolicy.Category;
+import com.github.ds67.jminicache.CachePolicy.ParsedPolicies;
+import com.github.ds67.jminicache.impl.ExpiryManager;
 import com.github.ds67.jminicache.impl.ManagerFactory;
+import com.github.ds67.jminicache.impl.TypeReference;
 import com.github.ds67.jminicache.impl.guard.GuardIF;
 import com.github.ds67.jminicache.impl.guard.LocalGuard;
-import com.github.ds67.jminicache.impl.storage.ExpiryManager;
 import com.github.ds67.jminicache.impl.storage.StorageManagerIF;
 
 /**
@@ -38,6 +40,7 @@ import com.github.ds67.jminicache.impl.storage.StorageManagerIF;
  *              It must provide a working {@link Object#equals(Object)} and {@link Object#hashCode()} implementation. 
  *             
  * @param <Value> Type of the cached item
+ * 
  */
 public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Value>>
 {	
@@ -62,21 +65,48 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	
 	private ExpiryManager<Key> expiryManager = null;
 	
-	public MiniCache (final CachePolicy... policies) {
-		CachePolicy evictionPolicy = CachePolicy.EVICTION_NONE;
-		for (final var policy: policies) {
-			if (policy.getCategory()==Category.EVICTION_POLICY) {
-				evictionPolicy=policy;
-			}
-			else if (policy.compareTo(CachePolicy.ENABLE_VALUE_EXPIRY)==0) {
-				expiryManager = new ExpiryManager<>(this::remove, getSchedulerService());
+	/**
+	 * Create a new Cache based on the given eviction policies.
+	 * 
+	 * @see CachePolicy
+	 * 
+	 * @param maxSize maximum size of the cache
+	 * @param policies comma separated list of {@link CachePolicy} 
+	 * 
+     * @throws {@link IllegalArgumentException} when {@link CachePolicy#THROW_ON_MISCONFIGURATION} policy is set. Otherwise a reasonable configuration is chosen
+	 */
+	public MiniCache (int maxSize, final CachePolicy... policies) {
+		ParsedPolicies p= CachePolicy.parsePolicies(policies);
+		
+		// Check if key type fits to tree storage policies
+		if (p.getTreeStoragePolicy().equals(CachePolicy.TREE_MAP_STORAGE)) {
+			var type = new TypeReference<Key>() {}.getType();
+			if (!Comparable.class.isAssignableFrom(type.getClass())) {
+				if (p.isThrowOnMisconfiguration()) {
+					throw new IllegalArgumentException("Key type "+type.getTypeName()+" is not comparable and therefore not suited for tree map storage");
+				}
+				else {
+					p.setTreeStoragePolicy(CachePolicy.HASH_MAP_STORAGE);
+				}
 			}
 		}
 		
-		manager = ManagerFactory.createCacheManager(false, evictionPolicy);
-		guard = manager.getGuard();
+		manager = ManagerFactory.createCacheManager(p);
+		guard = manager.getGuard();		
+		setMaxSize(maxSize);
 	}
 
+	/**
+	 * Creates unlimited size cache object.
+	 * 
+	 * @see #MiniCache(int, CachePolicy...)
+	 * 
+	 * @param policies
+	 */
+	public MiniCache (final CachePolicy... policies) {
+		this(-1,policies);
+	}
+	
 	private Function<Key, ValueWithExpiry<Value>> valueWithExpiryFactory = null;
 	private Function<Key, Value> valueFactory = null;
 	
@@ -223,7 +253,7 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 			return ValueWithExpiry.of(supplier.get(), expireDate);
 		});
 	}
-		
+    
 	protected void unsynchronized_set (final Key key, final Value value, final long expiry)
 	{
 		if (expiryManager!=null && expiry>0) {			
@@ -351,7 +381,6 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 	private Value unsynchronized_fetch (final Key key)
 	{
 		final var wrappedValue = manager.get(key);
-		if (wrappedValue==null) return null;
 		return wrappedValue;		
 	}
 	
@@ -432,14 +461,24 @@ public class MiniCache<Key, Value> implements Publisher<CacheChangeEvent<Key, Va
 		shrink();
 		return this;
 	}
+	
+	public synchronized int getMaxSize ()
+	{
+		return maxSize;
+	}
 
 	private void unsynchronized_shrink ()
 	{
 		if (maxSize<1) return;		
+		Key k=null;
 		while (manager.cachesize()>maxSize) {
 			final var last = manager.getForDeletion();
+			if (last!=null && last.equals(k)) {
+				Runtime.getRuntime().exit(1);
+			}
 			if (last!=null) unsynchronized_remove(last);
 			else break;
+			k=last;
 		}	
 	}
 	

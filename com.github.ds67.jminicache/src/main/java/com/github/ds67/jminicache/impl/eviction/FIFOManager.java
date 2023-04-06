@@ -20,12 +20,11 @@ public class FIFOManager<Key, Value, Wrapper extends ListWrapper<Key,Value, ? ex
 	}
 
 	@Override
-	public void onBeforeWrite(final Map<Key, Wrapper> cache, final Wrapper w) {
-		final var old = cache.get(w.getKey());
-		if (old!=null) {
-			old.onRemove();
+	public void onWrite(final Map<Key, Wrapper> cache, final Wrapper newWrapper, final Wrapper oldWrapper) {
+		if (oldWrapper!=null) {
+			oldWrapper.onRemove();
 		}
-		append(w);
+		append(newWrapper);
 	}
 
 	@Override

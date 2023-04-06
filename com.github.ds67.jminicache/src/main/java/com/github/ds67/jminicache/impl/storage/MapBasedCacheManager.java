@@ -8,19 +8,25 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
 import com.github.ds67.jminicache.impl.eviction.EvictionManagerIF;
 import com.github.ds67.jminicache.impl.guard.GuardIF;
 
-public class SimpleCacheManager<Key, Value, Wrapper> implements StorageManagerIF<Key, Value, Wrapper>{
+public class MapBasedCacheManager<Key, Value, Wrapper> implements StorageManagerIF<Key, Value, Wrapper>{
 
 	private final EvictionManagerIF<Key, Value, Wrapper> evictionManager;
 	
 	private final GuardIF guard; 
 	
-	public SimpleCacheManager(GuardIF guard, EvictionManagerIF<Key, Value, Wrapper> evictionManager) {
+	private Map<Key, Wrapper> cache = new HashMap<>();
+	
+	public MapBasedCacheManager(Supplier<Map<Key, Wrapper>> mapConstructor,
+			                    GuardIF guard, 
+			                    EvictionManagerIF<Key, Value, Wrapper> evictionManager) {
 		this.guard=guard;
 		this.evictionManager=evictionManager;
+		this.cache = mapConstructor.get();
 	}
 
 	@Override
@@ -43,15 +49,14 @@ public class SimpleCacheManager<Key, Value, Wrapper> implements StorageManagerIF
 		return evictionManager.getForDeletion();
 	}
 
-	private HashMap<Key, Wrapper> cache = new HashMap<>();
-	
 	@Override
 	public Value put (Key key, Value value, BiFunction<Key, Value, Wrapper> wrapper)
 	{
 		if (wrapper==null) wrapper=this::wrap;
 		final var w = wrapper.apply(key, value);
-		evictionManager.onBeforeWrite(cache, w);	
-		return unwrap(cache.put(key,w));
+		var oldWrapper = cache.put(key,w);
+		evictionManager.onWrite(cache, w, oldWrapper);	
+		return unwrap(oldWrapper);
 	}
 
 	@Override
@@ -72,8 +77,13 @@ public class SimpleCacheManager<Key, Value, Wrapper> implements StorageManagerIF
 	public Value remove (Key key)
 	{
 		final var w = cache.remove(key);
-		evictionManager.onDeletion(cache, w);
-		return unwrap(w);
+		if (w!=null) {
+			evictionManager.onDeletion(cache, w);
+			return unwrap(w);
+		}
+
+		// Key was already delete (because it was never in or some other thread removed it already)
+		return null;
 	}
 	
 	@Override

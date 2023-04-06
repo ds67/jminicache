@@ -26,7 +26,7 @@ import java.util.Map;
 public interface EvictionManagerIF<Key, Value, Wrapper> {
 	
 	public void onRead (final Map<Key, Wrapper> cache, final Wrapper w);
-	public void onBeforeWrite (final Map<Key, Wrapper> cache, final Wrapper w);
+	public void onWrite (final Map<Key, Wrapper> cache, final Wrapper newWrapper, final Wrapper oldWrapper);
 	public void onDeletion (final Map<Key, Wrapper> cache, final Wrapper w);
 	
 	public void onClear ();

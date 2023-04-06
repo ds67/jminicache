@@ -17,18 +17,19 @@ public class LRUManager<Key, Value, Wrapper extends ListWrapper<Key,Value, ? ext
 	@Override
 	public void onRead (final Map<Key, Wrapper> cache, final Wrapper w)
 	{
-		w.onRemove();
-		append (w);
+		if (w!=null) {
+			delete (w);
+			append (w);
+		}
 	}
 	
 	@Override
-	public void onBeforeWrite (final Map<Key, Wrapper> cache, final Wrapper w)
+	public void onWrite (final Map<Key, Wrapper> cache, final Wrapper newWrapper, final Wrapper oldWrapper)
 	{
-		final var old = cache.get(w.getKey());
-		if (old!=null) {
-			old.onRemove();
+		if (oldWrapper!=null) {
+			delete(oldWrapper);
 		}		
-		append (w);
+		append (newWrapper);
 	}
 
 

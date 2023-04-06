@@ -17,8 +17,6 @@ public class ManyThreadsTest {
 		final var randomizer = new Random();
 		var keys = new Random().ints(elements);
 		
-		System.out.println ("Start thread");
-		
 		keys.forEach(key -> {
 			cache.get(key%256,() -> {
 				int size = randomizer.nextInt(10000);
@@ -26,27 +24,40 @@ public class ManyThreadsTest {
 				randomizer.nextBytes(buffer);
 				return buffer;
 			},0);
-		});
-		
-		System.out.println ("Finished thread");
+		});		
  	}
+
+	private void burn (MiniCache<Integer, byte[]> cache, int iterations) throws InterruptedException
+	{
+		var latch = new CountDownLatch(5);
+		
+		for (int i=0;i<5;i++) {
+			new Thread(() -> { this.getAndAddElements(cache, iterations); latch.countDown(); }).start();
+		}
+				
+		latch.await();
+	}
+	
 	
 	@Test
 	public void fifoParallelTest () throws InterruptedException
 	{
-		final int maxSize = 10000;
-		
 		final var cache = new MiniCache<Integer, byte[]>(CachePolicy.EVICTION_FIFO)
 	              .setMaxSize(120);
 		
-		var latch = new CountDownLatch(5);
-		
-		for (int i=0;i<5;i++) {
-			new Thread(() -> { this.getAndAddElements(cache, maxSize*5); latch.countDown(); }).start();
-		}
-				
-		latch.await();
+		burn(cache,10000);
 
 		assertEquals(120, cache.size());
+	}
+	
+	@Test
+	public void lruParallelTest () throws InterruptedException
+	{
+		final var cache = new MiniCache<Integer, byte[]>(CachePolicy.EVICTION_LRU)
+	              .setMaxSize(250);
+		
+		burn(cache,10000);
+
+		assertEquals(250, cache.size());
 	}
 }

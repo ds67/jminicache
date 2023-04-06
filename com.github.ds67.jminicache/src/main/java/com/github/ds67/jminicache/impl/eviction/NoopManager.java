@@ -1,6 +1,8 @@
 package com.github.ds67.jminicache.impl.eviction;
 
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * Simplest possible eviction manager. It doesn't provide an eviction at all. All cached entries stay valid until they
@@ -13,18 +15,28 @@ import java.util.Map;
  * @param <Key> Type of the key to access the cached items
  * @param <Value> Type of the cached item
  */
-public class NoopManager<Key, Value> implements EvictionManagerIF<Key, Value, Value> {
+public class NoopManager<Key, Value, Wrapper> implements EvictionManagerIF<Key, Value, Wrapper> {
 
-	public NoopManager() {
-	}
+	private BiFunction<Key,Value,Wrapper> wrapper;
+	private Function<Wrapper,Value> unWrapper;
 	
+	public NoopManager(BiFunction<Key,Value,Wrapper> wrapper, Function<Wrapper,Value> unWrapper) {
+		this.wrapper=wrapper;
+		this.unWrapper=unWrapper;
+	}
+
+	public static <Key,Value> NoopManager<Key, Value, Value> ofIdentity()
+	{
+		return new NoopManager<>((k,v) -> v, v -> v);
+	}
+		
 	@Override
-	public Value createWrapper(Key k, Value v) {
-		return v;
+	public Wrapper createWrapper(Key k, Value v) {
+		return wrapper.apply(k,v);
 	}
 	
-	public Value unwrap (Value v) {
-		return v;
+	public Value unwrap (Wrapper v) {
+		return unWrapper.apply(v);
 	}
 
 	@Override
@@ -33,15 +45,15 @@ public class NoopManager<Key, Value> implements EvictionManagerIF<Key, Value, Va
 	}
 
 	@Override
-	public void onRead(Map<Key, Value> cache, Value w) {	
+	public void onRead(Map<Key, Wrapper> cache, Wrapper w) {	
 	}
 
 	@Override
-	public void onBeforeWrite(Map<Key,Value> cache, Value w) {
+	public void onWrite(Map<Key,Wrapper> cache, final Wrapper newWrapper, final Wrapper oldWrapper) {
 	}
 
 	@Override
-	public void onDeletion(Map<Key, Value> cache, Value w) {
+	public void onDeletion(Map<Key, Wrapper> cache, Wrapper w) {
 	}
 
 	@Override

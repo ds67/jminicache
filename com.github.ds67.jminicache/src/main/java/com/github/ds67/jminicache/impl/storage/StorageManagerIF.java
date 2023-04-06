@@ -25,8 +25,22 @@ public interface StorageManagerIF<Key, Value, Wrapper>
 	public Value put (Key key, Value value, BiFunction<Key, Value, Wrapper> wrapper);
 	
 	public int cachesize ();
+	
+	/**
+	 * Checks if a key is contained in the storage structure
+	 * 
+	 * @param key Key which should be checked.
+	 * @return <code>true</code> when key exists in cache, <code>false</code> otherwise
+	 */
 	public boolean contains (Key key);
 	
+	/**
+	 * This method provides the key which should be removed as next from the cache. 
+	 * The decision which item should be removed is provided by the 
+	 * {@link com.github.ds67.jminicache.impl.eviction} manager.
+	 *
+	 * @return next key which should be deleted or <code>null</code> when cache is empty
+	 */
 	public Key getForDeletion ();
 	
 	public Wrapper wrap (final Key k, final Value v);
