@@ -4,3 +4,4 @@ com.github.ds67.jminicache.impl.eviction
 com.github.ds67.jminicache.impl.guard
 com.github.ds67.jminicache.impl.payload
 com.github.ds67.jminicache.impl.storage
+com.github.ds67.jminicache.plugin
