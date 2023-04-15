@@ -8,7 +8,7 @@ import java.util.Map;
  * It provides event slots to be informed about every read, insert or deletion of items (or the complete clearance 
  * of the cache).
  * @see #onRead(Map, Object)
- * @see #onBeforeWrite(Map, Object)
+ * @see #onWrite(Map, Object, Object)
  * @see #onDeletion(Map, Object)
  * @see #onClear()
  * 

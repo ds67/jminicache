@@ -19,9 +19,11 @@ public class FifoTest {
 	public void fifoFunctionTest() throws Exception 
 	{
 		final int maxSize = 10;
-		final var cache = new MiniCache<Integer, Integer>(CachePolicy.EVICTION_FIFO)
-							  .setValueFactory(FifoTest::sqr)
-				              .setMaxSize(maxSize);
+		final var cache =  new MiniCacheBuilder<Integer, Integer>()
+				.setEvictionPolicy(MiniCacheBuilder.EvictionPolicy.EVICTION_FIFO)
+			    .setMaxSize(maxSize)
+			    .setValueFactory(FifoTest::sqr)
+			    .build();
 		
 		for (int i=0;i<4*maxSize;i++) {
 			int v = i%(2*maxSize);
@@ -43,9 +45,11 @@ public class FifoTest {
 	public void fifoClearTest() throws Exception 
 	{
 		final int maxSize = 10;
-		final var cache = new MiniCache<Integer, Integer>(CachePolicy.EVICTION_FIFO)
-							  .setValueFactory(FifoTest::sqr)
-				              .setMaxSize(maxSize);
+		final var cache = new MiniCacheBuilder<Integer, Integer>()
+				.setEvictionPolicy(MiniCacheBuilder.EvictionPolicy.EVICTION_FIFO)
+			    .setMaxSize(maxSize)
+			    .setValueFactory(FifoTest::sqr)
+			    .build();
 		
 		// Fill cache
 		for (int i=0;i<4*maxSize;i++) cache.get(i%(2*maxSize));

@@ -16,8 +16,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import com.github.ds67.jminicache.CachePolicy;
-import com.github.ds67.jminicache.MiniCache;
+import com.github.ds67.jminicache.MiniCacheBuilder;
+import com.github.ds67.jminicache.MiniCacheBuilder.EvictionPolicy;
 
 /*
  * Shows how to persist the cache and restore it afterwards.
@@ -37,8 +37,10 @@ public class PersistCacheOnShutdown {
 	{
 		System.out.println ("Store entryset as a list of key / values pairs");
 
-		final var cache = new MiniCache<Long, Long>(CachePolicy.EVICTION_FIFO)
-	              .setMaxSize(maxSize);
+		final var cache = new MiniCacheBuilder<Long, Long>()
+				.setEvictionPolicy(EvictionPolicy.EVICTION_FIFO)
+	              .setMaxSize(maxSize)
+	              .build();
 		
 		// Fill cache with random values
 		final var randoms = new Random().longs().iterator();
@@ -64,8 +66,10 @@ public class PersistCacheOnShutdown {
 		// data into a local data structure with is than inserted at once in the cache.
 		{
 			System.out.println ("Recreate with single sets");
-			final var loadedCache = new MiniCache<Long, Long>(CachePolicy.EVICTION_FIFO)
-		              .setMaxSize(maxSize);
+			final var loadedCache = new MiniCacheBuilder<Long, Long>()
+					.setEvictionPolicy(EvictionPolicy.EVICTION_FIFO)
+		              .setMaxSize(maxSize)
+		              .build();
 			
 			final long start = System.currentTimeMillis();
 			try (var input = new ObjectInputStream(new FileInputStream(storage.toFile()))) {
@@ -87,8 +91,10 @@ public class PersistCacheOnShutdown {
 		// a little bit faster than the first approach (depends also on file caching, be careful)
 		{
 			System.out.println ("Recreate by setting a map at once");
-			final var loadedCache = new MiniCache<Long, Long>(CachePolicy.EVICTION_FIFO)
-		              .setMaxSize(maxSize);
+			final var loadedCache =  new MiniCacheBuilder<Long, Long>()
+					.setEvictionPolicy(EvictionPolicy.EVICTION_FIFO)
+		              .setMaxSize(maxSize)
+		              .build();
 			
 			final long start = System.currentTimeMillis();
 			Set<Map.Entry<Long, Long>> entries = new HashSet<>();
@@ -114,8 +120,10 @@ public class PersistCacheOnShutdown {
 	{
 		System.out.println ("Store entryset as an object and recreate it as a single object");
 		
-		final var cache = new MiniCache<Long, Long>(CachePolicy.EVICTION_FIFO)
-	              .setMaxSize(maxSize);
+		final var cache =  new MiniCacheBuilder<Long, Long>()
+				.setEvictionPolicy(EvictionPolicy.EVICTION_FIFO)
+	              .setMaxSize(maxSize)
+	              .build();
 		
 		// Fill cache with random values
 		final var randoms = new Random().longs().iterator();
@@ -132,8 +140,10 @@ public class PersistCacheOnShutdown {
 		System.out.println ("Storage file size: "+Files.size(storage)+ " bytes");
 		
 		// Create new empty cache  
-		final var loadedCache = new MiniCache<Long, Long>(CachePolicy.EVICTION_FIFO)
-	              .setMaxSize(maxSize);
+		final var loadedCache =  new MiniCacheBuilder<Long, Long>()
+				.setEvictionPolicy(EvictionPolicy.EVICTION_FIFO)
+	              .setMaxSize(maxSize)
+	              .build();
 		
 		final long start = System.currentTimeMillis();
 		try (var input = new ObjectInputStream(new FileInputStream(storage.toFile()))) {

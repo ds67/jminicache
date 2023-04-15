@@ -7,7 +7,7 @@ public abstract class TypeReference<T> {
 
     private final Type type;
 
-    public TypeReference() {
+    protected TypeReference() {
         Type superclass = getClass().getGenericSuperclass();
         type = ((ParameterizedType)superclass).getActualTypeArguments()[0];
     }

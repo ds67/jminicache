@@ -7,8 +7,9 @@ import java.util.concurrent.CountDownLatch;
 
 import org.junit.jupiter.api.Test;
 
-import com.github.ds67.jminicache.CachePolicy;
 import com.github.ds67.jminicache.MiniCache;
+import com.github.ds67.jminicache.MiniCacheBuilder;
+import com.github.ds67.jminicache.MiniCacheBuilder.EvictionPolicy;
 
 public class ManyThreadsTest {
 
@@ -42,8 +43,10 @@ public class ManyThreadsTest {
 	@Test
 	public void fifoParallelTest () throws InterruptedException
 	{
-		final var cache = new MiniCache<Integer, byte[]>(CachePolicy.EVICTION_FIFO)
-	              .setMaxSize(120);
+		final var cache =  new MiniCacheBuilder<Integer, byte[]>()
+			.setEvictionPolicy(EvictionPolicy.EVICTION_FIFO)
+           .setMaxSize(120)
+           .build();
 		
 		burn(cache,10000);
 
@@ -53,8 +56,10 @@ public class ManyThreadsTest {
 	@Test
 	public void lruParallelTest () throws InterruptedException
 	{
-		final var cache = new MiniCache<Integer, byte[]>(CachePolicy.EVICTION_LRU)
-	              .setMaxSize(250);
+		final var cache = new MiniCacheBuilder<Integer, byte[]>()
+				.setEvictionPolicy(EvictionPolicy.EVICTION_LRU)
+		           .setMaxSize(250)
+		           .build();
 		
 		burn(cache,10000);
 

@@ -10,8 +10,11 @@ public class ExpiryTest {
 	public void simpleExpireTestOfOneElement () throws InterruptedException
 	{
 		final int maxSize = 10;
-		final var cache = new MiniCache<Integer, Integer>(CachePolicy.EVICTION_FIFO, CachePolicy.ENABLE_VALUE_EXPIRY)
-				              .setMaxSize(maxSize);
+		final var cache = new MiniCacheBuilder<Integer, Integer>()
+					.setEvictionPolicy(MiniCacheBuilder.EvictionPolicy.EVICTION_FIFO)
+					.setUseExpiry(true)
+				    .setMaxSize(maxSize)
+				    .build();
 		
 		final var expireDate = System.currentTimeMillis()+300;
 		cache.set(42,42,expireDate);
@@ -29,9 +32,12 @@ public class ExpiryTest {
 	public void mutipleExpireTestOfElements () throws InterruptedException
 	{
 		final int maxSize = 10;
-		final var cache = new MiniCache<Integer, Integer>(CachePolicy.EVICTION_FIFO, CachePolicy.ENABLE_VALUE_EXPIRY)
-				              .setMaxSize(maxSize);
-		
+		final var cache = new MiniCacheBuilder<Integer, Integer>()
+				.setEvictionPolicy(MiniCacheBuilder.EvictionPolicy.EVICTION_FIFO)
+				.setUseExpiry(true)
+			    .setMaxSize(maxSize)
+			    .build();
+	
 		final var expireDate = System.currentTimeMillis()+300;
 		cache.set(42,42,expireDate);
 		cache.set(43,43,expireDate);

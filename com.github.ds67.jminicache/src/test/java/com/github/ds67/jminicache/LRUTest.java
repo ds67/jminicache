@@ -20,9 +20,11 @@ public class LRUTest {
 	public void lruNoAccessTest() throws Exception 
 	{
 		final int maxSize = 10;
-		final var cache = new MiniCache<Integer, Integer>(CachePolicy.EVICTION_LRU)
-							  .setValueFactory(LRUTest::sqr)
-				              .setMaxSize(maxSize);
+		final var cache = new MiniCacheBuilder<Integer, Integer>()
+				.setEvictionPolicy(MiniCacheBuilder.EvictionPolicy.EVICTION_LRU)
+			    .setMaxSize(maxSize)
+			    .setValueFactory(FifoTest::sqr)
+			    .build();
 		
 		// Insert but never access. Then the LRU should fall back in insertion order and remove the oldest entries
 		for (int i=0;i<4*maxSize;i++) {
@@ -41,8 +43,10 @@ public class LRUTest {
 	public void basicLRUTest ()
 	{
 		final int maxSize = 10;
-		final var cache = new MiniCache<Integer, Integer>(CachePolicy.EVICTION_LRU)
-				              .setMaxSize(maxSize);
+		final var cache = new MiniCacheBuilder<Integer, Integer>()
+				.setEvictionPolicy(MiniCacheBuilder.EvictionPolicy.EVICTION_LRU)
+			    .setMaxSize(maxSize)
+			    .build();
 		
 		for (int i=0;i<10;i++) cache.set(i,i);
 		cache.fetch(0);
