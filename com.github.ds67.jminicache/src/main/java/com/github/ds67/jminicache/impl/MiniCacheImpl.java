@@ -303,7 +303,9 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 	@Override
 	public synchronized MiniCache<Key, Value> setValueWithExpiryFactory (final Function<Key,ValueWithExpiry<Value>> valueFactory)
 	{
-		this.valueWithExpiryFactory=valueFactory;
+		guard.writeLocked(() -> {
+			this.valueWithExpiryFactory=valueFactory;
+		});
 		return this;
 	}
 	

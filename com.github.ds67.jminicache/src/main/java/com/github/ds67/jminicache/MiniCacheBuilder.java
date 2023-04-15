@@ -303,7 +303,7 @@ public class MiniCacheBuilder<Key, Value> {
 	 */
 	public static void setSchedulerService (final ScheduledExecutorService scheduler)
 	{
-		MiniCacheImpl.scheduler = scheduler;
+		MiniCacheBuilder.scheduler = scheduler;
 	}
 }
 
