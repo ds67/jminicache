@@ -84,4 +84,16 @@ public class TimingPlugin<Key, Value> implements Plugin<Key,Value>{
 	public void onClear() {
 	}
 
+	@Override
+	public void onBeforeFetch(Key k) {
+	}
+
+	@Override
+	public void onAfterFetch(Key key, Value value) {
+	}
+
+	@Override
+	public void onExpire(Key k) {
+	}
+
 }

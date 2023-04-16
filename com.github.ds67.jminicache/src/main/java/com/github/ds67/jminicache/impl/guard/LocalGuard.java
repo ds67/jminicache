@@ -54,9 +54,10 @@ public class LocalGuard implements GuardIF
 	}
 
 	@Override
-	public void promoteLock() {
-		guard.promoteLock();
+	public boolean promoteLock() {
+		final boolean r = guard.promoteLock();
 		readLock = false;
 		writeLock= true;
+		return r;
 	}
 }

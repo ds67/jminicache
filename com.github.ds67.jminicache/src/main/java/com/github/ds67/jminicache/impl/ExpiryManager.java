@@ -31,7 +31,9 @@ public class ExpiryManager<Key> {
 	{
 		unsynchronized_remove(key);
 		expieries.compute(expiry, (k,v) -> {
-			if (v==null) v=new ArrayList<Key>();
+			if (v==null) {
+				v=new ArrayList<Key>();
+			}
 			v.add(key);
 			return v;
 		});
@@ -96,7 +98,8 @@ public class ExpiryManager<Key> {
 		do {
 			var oldestEntry = expieries.firstEntry();
 			if (oldestEntry.getKey()<=System.currentTimeMillis()) {
-				oldestEntry.getValue().forEach(deletionTrigger);
+				var keys = new ArrayList<>(oldestEntry.getValue());
+				keys.forEach(deletionTrigger);
 				expieries.remove(oldestEntry.getKey());
 			}
 			else { done = true; }

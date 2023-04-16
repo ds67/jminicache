@@ -20,9 +20,10 @@ public class ReadWriteGuard implements GuardIF  {
 	}
 
 	@Override
-	public void promoteLock() {
+	public boolean promoteLock() {
 		guard.readLock().unlock();
 		guard.writeLock().lock();
+		return true;
 	}
 
 	@Override

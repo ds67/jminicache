@@ -35,8 +35,10 @@ public class StatisticsPlugin<Key,Value> implements Plugin<Key,Value>, Statistic
 		clears.reset();
 		refreshes.reset();
 		collisions.reset();
+		expired.reset();
 	}
 	
+	private LongAdder fetches = new LongAdder();
 	private LongAdder gets = new LongAdder();
 	private LongAdder sets = new LongAdder();
 	private LongAdder misses = new LongAdder();
@@ -45,7 +47,8 @@ public class StatisticsPlugin<Key,Value> implements Plugin<Key,Value>, Statistic
 	private LongAdder clears = new LongAdder();
 	private LongAdder refreshes = new LongAdder();
 	private LongAdder collisions = new LongAdder();
-	
+	private LongAdder expired = new LongAdder();
+
 	@Override
 	public void onBeforeGet(Key k) {
 	}
@@ -53,6 +56,15 @@ public class StatisticsPlugin<Key,Value> implements Plugin<Key,Value>, Statistic
 	@Override
 	public void onAfterGet(Key key, Value value) {
 		gets.increment();
+	}
+
+	@Override
+	public void onBeforeFetch(Key k) {
+	}
+
+	@Override
+	public void onAfterFetch(Key key, Value value) {
+		fetches.increment();
 	}
 
 	@Override
@@ -99,6 +111,11 @@ public class StatisticsPlugin<Key,Value> implements Plugin<Key,Value>, Statistic
 	}
 
 	@Override
+	public long getFetchCounter() {
+		return fetches.sum();
+	}
+	
+	@Override
 	public long getGetCounter() {
 		return gets.sum();
 	}
@@ -138,9 +155,35 @@ public class StatisticsPlugin<Key,Value> implements Plugin<Key,Value>, Statistic
 	{
 		return collisions.sum();
 	}
+	
+	@Override
+	public long getExpiredCounter()
+	{
+		return expired.sum();
+	}
 
 	@Override
 	public MiniCache<?, ?> getCache() {
 		return cache;
+	}
+	
+	@Override
+	public void onExpire (Key key)
+	{
+		expired.increment();
+	}
+	
+	@Override
+	public String toString ()
+	{
+		return String.format("Gets:%d\nFetches:%d\nSets:%d\nMisses:%d\nRemovals:%d\nShrinks:%d\nCollisions:%d\nExpired:%d", 
+				getGetCounter(),
+				getFetchCounter(), 
+				getUpdateCounter(), 
+				getMissesCounter(), 
+				getRemovalCounter(), 
+				getShrinkCounter(),
+				getCollisionCounter(),
+				getExpiredCounter());
 	}
 }

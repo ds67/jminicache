@@ -31,9 +31,11 @@ public interface GuardIF {
 	public void unlockWrite ();
 	
 	/**
-	 * Promoted an existing read lock to an write lock. Might wait until other readers unlock. 
+	 * Promoted an existing read lock to an write lock. Might wait until other readers unlock.
+	 * 
+	 * @return <code>true</code> when the promotion did happen, <code>false</code> when the lock status didn't change
 	 */
-	public void promoteLock();
+	public boolean promoteLock();
 	
 	/**
 	 * Can be called when there is a long lasting lock. When other threads wait for lock aquiring these threads will be

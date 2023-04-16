@@ -81,6 +81,7 @@ public class MiniCacheBuilder<Key, Value> {
 	private Comparator<Key> keyComparator = null;
 	private int maxSize = -1;
 	private Function<Key, ValueWithExpiry<Value>> valueFactory = null;
+	private Function<Key, ValueWithExpiry<Value>> refreshMethod = null;
 	private boolean statistics = false;
 	
 	public MiniCacheBuilder<Key,Value> setEvictionPolicy (EvictionPolicy evictionPolicy)
@@ -176,11 +177,25 @@ public class MiniCacheBuilder<Key, Value> {
 	 * 
 	 * If this policy is not set upon creation the expire date is not used. Adding such a date to a set method has no effect.
 	 * @param useExpiry
-	 * @return
+	 * @return {@link MiniCache} instance
 	 */
 	public MiniCacheBuilder<Key,Value> setUseExpiry (boolean useExpiry)
 	{
 		this.useExpiry = useExpiry;
+		return this;
+	}
+	
+	/**
+	 * Sets a refresh methods which is called for a key when the corresponfing value is expired.
+	 * 
+	 * @see MiniCache#setRefreshMethod(Function)
+	 * 
+	 * @param refreshMethod
+	 * @return {@link MiniCache} instance
+	 */
+	public MiniCacheBuilder<Key,Value> setRefreshMethod (Function<Key, ValueWithExpiry<Value>> refreshMethod)
+	{
+		this.refreshMethod=refreshMethod;
 		return this;
 	}
 	
@@ -195,6 +210,9 @@ public class MiniCacheBuilder<Key, Value> {
 		var cache = new MiniCacheImpl<Key, Value>(maxSize, evictionPolicy, storagePolicy, useWeakKeys, useExpiry, keyComparator);
 		if (valueFactory!=null) {
 			cache.setValueWithExpiryFactory(valueFactory);
+		}
+		if (refreshMethod!=null) {
+			cache.setRefreshMethod(refreshMethod);
 		}
 		cache.setCalculateStatistics(statistics);
 		

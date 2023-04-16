@@ -25,13 +25,13 @@ public class PluginManager<Key,Value> implements Plugin<Key,Value> {
 	}
 
 	@Override
-	public void onBeforeGet(Key key) {
-		if (plugins!=null) plugins.forEach(p -> p.onBeforeGet(key));		
+	public void onBeforeFetch(Key key) {
+		if (plugins!=null) plugins.forEach(p -> p.onBeforeFetch(key));		
 	}
 
 	@Override
-	public void onAfterGet(Key key, Value value) {
-		if (plugins!=null) plugins.forEach(p -> p.onAfterGet(key, value));		
+	public void onAfterFetch(Key key, Value value) {
+		if (plugins!=null) plugins.forEach(p -> p.onAfterFetch(key, value));		
 	}
 
 	@Override
@@ -77,5 +77,20 @@ public class PluginManager<Key,Value> implements Plugin<Key,Value> {
 	@Override
 	public void onClear() {
 		if (plugins!=null) plugins.forEach(p -> p.onClear());		
+	}
+
+	@Override
+	public void onBeforeGet(Key key) {
+		if (plugins!=null) plugins.forEach(p -> p.onBeforeGet(key));		
+	}
+
+	@Override
+	public void onAfterGet(Key key, Value value) {
+		if (plugins!=null) plugins.forEach(p -> p.onAfterGet(key,value));		
+	}
+	
+	@Override
+	public void onExpire(Key key) {
+		if (plugins!=null) plugins.forEach(p -> p.onExpire(key));		
 	}
 }

@@ -16,7 +16,7 @@ See https://ds67.github.io/jminicache/javadoc/ for API documentation
 There are different update policies. Choose the appropriate methods by your needs. Different provider methods can be combined.
 
 Consider an object cache backed by an database. You may periodically refresh all currently known keys in a batch but retrieve data for new keys immediately from the
-database backend.
+database backend.new MiniCacheBuilder<Integer, Integer>().build();
 
 ### Simple updates
 
@@ -33,7 +33,7 @@ When the requested key was not found in the cache storage the supplier method is
 even when several parallel requests for the missing key arrive before value retrieval. Furthermore the cache is not blocked when executing the supplier function,
 therefore it may take time.
 
-	final var cache = new MiniCache<Value>();
+	final var cache = new MiniCacheBuilder<Key, Value>().build();
 	Value v = cache.get ("test", () -> {
 	   Value v = new Value();
 	   // do some expensive operations to generate the value

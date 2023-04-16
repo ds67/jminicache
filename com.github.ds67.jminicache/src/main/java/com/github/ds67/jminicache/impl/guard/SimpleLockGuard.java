@@ -21,7 +21,8 @@ public class SimpleLockGuard implements GuardIF {
 	}
 
 	@Override
-	public void promoteLock() {
+	public boolean promoteLock() {
+		return false;
 	}
 
 	@Override

@@ -43,7 +43,7 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 		guard = manager.getGuard();		
 		setMaxSize(maxSize);
 		if (useExpiry) {
-			expiryManager = new ExpiryManager<Key>(this::remove, MiniCacheBuilder.getSchedulerService());
+			expiryManager = new ExpiryManager<Key>(this::expired, MiniCacheBuilder.getSchedulerService());
 		}
 	}
 
@@ -57,6 +57,15 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 	
 	@Override
 	public <E extends Throwable> Value get (final Key key, ValueSupplier<ValueWithExpiry<Value>, E> supplier) throws E
+	{
+		// use a dedicated function for doing the get and extract the get plugin notifications as internal_get might be called recursive
+		plugins.onBeforeGet(key);
+		final var result = internal_get(key, supplier);
+		plugins.onAfterGet(key, result);
+		return result;
+	}
+	
+	protected <E extends Throwable> Value internal_get (final Key key, ValueSupplier<ValueWithExpiry<Value>, E> supplier) throws E
 	{
 		LocalGuard lGuard = new LocalGuard(guard);
 		
@@ -72,12 +81,15 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 				return null;
 			}
 			
-			lGuard.promoteLock();
-			// Recheck if value is already there. Between last check and lock promotion somebody else might
-			// have inserted the key.
-			available_value = unsynchronized_fetch(key);
-			if (available_value!=null) {
-				return available_value;
+			var promoted = lGuard.promoteLock();
+			if (promoted) {
+				// Recheck if value is already there. Between last check and lock promotion somebody else might
+				// have inserted the key. This section can be skipped when no promotion took place and therefore
+				// the read was already done with an exclusive lock
+				available_value = unsynchronized_fetch(key);
+				if (available_value!=null) {
+					return available_value;
+				}
 			}
 			
 			var localGuard = creationGuards.get(key);
@@ -87,7 +99,7 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 				plugins.onValueCreateCollision(key);
 				try {
 					localGuard.readLock().lock();
-					return get(key, supplier);
+					return internal_get(key, supplier);
 				}
 				finally {
 					localGuard.readLock().unlock();
@@ -216,12 +228,12 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 	
 	private Value unsynchronized_fetch (final Key key)
 	{
-		plugins.onBeforeGet(key);
+		plugins.onBeforeFetch(key);
 		final var value = manager.get(key);
 		if (value==null && !manager.contains(key)) {
 			plugins.onMiss(key);
 		}
-		plugins.onAfterGet(key, value);
+		plugins.onAfterFetch(key, value);
 		return value;		
 	}
 	
@@ -231,11 +243,12 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 		return guard.readLocked(() -> this.unsynchronized_fetch(key));	
 	}
 	
-	protected Value unsynchronized_remove (Key key)
+	// removeFromExpireManager is false when the method is called from the expirymanager, true otherwise
+	protected Value unsynchronized_remove (Key key, boolean removeFromExpireManager)
 	{
 		plugins.onBeforeRemove(key);
 		final var removedElement = manager.remove(key);
-		if (expiryManager!=null) expiryManager.remove(key);
+		if (expiryManager!=null && removeFromExpireManager) expiryManager.remove(key);
 		plugins.onAfterRemove(key, removedElement);
 		return removedElement;		
 	}
@@ -243,7 +256,7 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 	@Override
 	public void remove (Key key)
 	{		
-		guard.writeLocked(() -> unsynchronized_remove(key));		
+		guard.writeLocked(() -> unsynchronized_remove(key,true));		
 	}
 
 	@Override
@@ -288,7 +301,7 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 		while (manager.cachesize()>maxSize) {
 			final var last = manager.getForDeletion();
 			if (last!=null) {
-				unsynchronized_remove(last);
+				unsynchronized_remove(last,true);
 				plugins.onShrink(last);
 			}
 			else break;
@@ -318,12 +331,21 @@ public class MiniCacheImpl<Key, Value> implements MiniCache<Key, Value>
 		return this;
 	}
 	
+	private void expired (Key key)
+	{
+		guard.writeLocked(() -> {
+			plugins.onExpire(key);
+			unsynchronized_remove(key,false);	
+		});		
+	}
+
 	@Override
 	public synchronized MiniCache<Key, Value> setRefreshMethod (final Function<Key,ValueWithExpiry<Value>> refreshMethod)
 	{
-		if (refreshMethod==null) expiryManager.setDeletionTrigger(this::remove);
+		if (refreshMethod==null) expiryManager.setDeletionTrigger(this::expired);
 		else expiryManager.setDeletionTrigger((key) -> {
 			final var newValue = refreshMethod.apply(key);
+			plugins.onExpire(key);
 			plugins.onRefresh(key);
 			this.set(key, newValue.getValue(), newValue.getExpiry());
 		});

@@ -25,6 +25,8 @@ public interface Statistics {
 	 */
 	boolean isActive ();
 	
+	long getFetchCounter();
+	
 	/**
 	 * Counter of how many get accesses are done
 	 * @return get accesses
@@ -72,6 +74,12 @@ public interface Statistics {
 	 * @return key supply collision counter
 	 */
 	long getCollisionCounter();
+	
+	/**
+	 * Returns how often a value expired because it was outdated
+	 * @return expired element counter
+	 */
+	long getExpiredCounter();
 	
 	/**
 	 * Retrieves the cache object which statistics are collected for
