@@ -30,24 +30,28 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 
 	@Override
 	public Key getForDeletion() {
+		cleanup();
 		return wrappedCacheManager.getForDeletion();
 	}
 
 	@Override
 	public int cachesize ()
 	{
+		cleanup();
 		return wrappedCacheManager.cachesize();
 	}
 
 	@Override
 	public Value get (final Key key)
 	{ 
-		return wrappedCacheManager.get(key); 
+		final var result = wrappedCacheManager.get(key);
+		return result;
 	}
 	
 	@Override
 	public Value remove (Key key)
 	{
+		cleanup();
 		return wrappedCacheManager.remove(key);
 	}
 
@@ -63,7 +67,13 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 	{
 		PayloadIF<Key, Value> removed = null;
 		while ((removed=(PayloadIF<Key, Value>)referenceQueue.poll())!=null) {
+			boolean promoted = getGuard().promoteLock();
+			System.out.println("Removed key:"+removed.getKey());
 			wrappedCacheManager.remove(removed.getKey());
+			if (promoted) {
+				getGuard().unlockWrite();
+				getGuard().lockRead();
+			}
 		}
 	}
 	
@@ -95,29 +105,34 @@ public class SoftManager<Key, Value, Wrapper extends PayloadIF<Key, Value>> impl
 	@Override
 	public boolean contains (Key key)
 	{
+		cleanup();
 		return wrappedCacheManager.contains(key);
 	}
 	
 	@Override 
 	public void clear ()
 	{
+		cleanup();
 		wrappedCacheManager.clear();
 	}
 	
 	 @Override
 	 public Set<Key> keySet ()
 	 {
+		 cleanup();
 		 return wrappedCacheManager.keySet();
 	 }
 
 	 @Override
  	 public Set<Map.Entry<Key,Value>> entrySet() {
+		 cleanup();
 		 return wrappedCacheManager.entrySet();
 	}
 	 
 	 @Override
 	 public Collection<Value> values ()
 	 {
+		 cleanup();
 		 return wrappedCacheManager.values();
 	 }
 }

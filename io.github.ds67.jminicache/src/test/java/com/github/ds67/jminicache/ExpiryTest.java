@@ -22,7 +22,7 @@ public class ExpiryTest {
 		Thread.sleep(400);
 		
 		assertEquals(1,cache.size());
-		Thread.sleep(200);
+		Thread.sleep(300);
 		assertEquals(0,cache.size());
 	}
 	

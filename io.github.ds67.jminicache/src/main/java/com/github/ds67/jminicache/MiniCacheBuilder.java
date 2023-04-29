@@ -1,5 +1,6 @@
 package com.github.ds67.jminicache;
 
+import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -77,7 +78,7 @@ public class MiniCacheBuilder<Key, Value> {
 	private EvictionPolicy evictionPolicy=EvictionPolicy.EVICTION_NONE;
 	private StoragePolicy storagePolicy=StoragePolicy.HASH_MAP_STORAGE;
 	private boolean useExpiry = false;
-	private boolean useWeakKeys = false;
+	private boolean useSoftKeys = false;
 	private Comparator<Key> keyComparator = null;
 	private int maxSize = -1;
 	private Function<Key, ValueWithExpiry<Value>> valueFactory = null;
@@ -149,13 +150,13 @@ public class MiniCacheBuilder<Key, Value> {
 	}
 	
 	/**
-	 * Set using {@link WeakReference} keys
+	 * Set using {@link SoftReference} keys
 	 * 
      * @return MiniCacheBuilder instance to allow chaining	
 	 */
-	public MiniCacheBuilder<Key,Value> setUseWeakKeys (boolean useWeakKeys)
+	public MiniCacheBuilder<Key,Value> setUseSoftKeys (boolean useSoftKeys)
 	{
-		this.useWeakKeys=useWeakKeys;
+		this.useSoftKeys=useSoftKeys;
 		return this;
 	}
 	
@@ -207,7 +208,7 @@ public class MiniCacheBuilder<Key, Value> {
 	 */
 	public MiniCache<Key, Value> build ()
 	{
-		var cache = new MiniCacheImpl<Key, Value>(maxSize, evictionPolicy, storagePolicy, useWeakKeys, useExpiry, keyComparator);
+		var cache = new MiniCacheImpl<Key, Value>(maxSize, evictionPolicy, storagePolicy, useSoftKeys, useExpiry, keyComparator);
 		if (valueFactory!=null) {
 			cache.setValueWithExpiryFactory(valueFactory);
 		}

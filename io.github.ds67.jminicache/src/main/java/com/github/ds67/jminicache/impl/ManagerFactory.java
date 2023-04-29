@@ -40,7 +40,7 @@ public class ManagerFactory {
 	}
 
 	public static <Key, Value> StorageManagerIF<Key, Value, ?> createCacheManager (MiniCacheBuilder.EvictionPolicy policy,
-																				   MiniCacheBuilder.StoragePolicy policy2,
+																				   MiniCacheBuilder.StoragePolicy storagePolicy,
 																				   Comparator<Key> comparator,
 			                                                                       boolean weakKeys)
 	{
@@ -56,11 +56,11 @@ public class ManagerFactory {
 				(w) -> w.getPayload()
 			);
 			
-			return new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(mapCreatorFunction(policy2, comparator), new SimpleLockGuard(), lruEvictionManager);
+			return new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(mapCreatorFunction(storagePolicy, comparator), new SimpleLockGuard(), lruEvictionManager);
 		}
 		else if (weakKeys && policy.equals(MiniCacheBuilder.EvictionPolicy.EVICTION_LRU)) {
 			final var lruEvictionManager = new LRUManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(null, null);
-			final var cacheManager = new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(mapCreatorFunction(policy2, comparator), new SimpleLockGuard(),  lruEvictionManager);
+			final var cacheManager = new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(mapCreatorFunction(storagePolicy, comparator), new SimpleLockGuard(),  lruEvictionManager);
 			
 			return new SoftManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(
 					cacheManager, 
@@ -86,13 +86,37 @@ public class ManagerFactory {
 				}
 			);
 			
-			return new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(mapCreatorFunction(policy2, comparator), new ReadWriteGuard(), evictionManager);
+			return new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeyValuePayload<Key,Value>>>(mapCreatorFunction(storagePolicy, comparator), new ReadWriteGuard(), evictionManager);
+		}
+		else if (weakKeys && policy.equals(MiniCacheBuilder.EvictionPolicy.EVICTION_FIFO)) {
+			final var evictionManager = new FIFOManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(
+				// No function to wrap the payload, will be provided by the storage manager	
+				null, 
+				// Function to unwrap the payload
+				(w) -> {
+					return w.getPayload();
+				}
+			);
+			
+			final var cacheManager = new MapBasedCacheManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(mapCreatorFunction(storagePolicy, comparator), new ReadWriteGuard(), evictionManager);
+			
+			return new SoftManager<Key, Value, ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>>(
+					cacheManager, 
+					// Function to wrap the payload
+					(k,v,q) -> {
+						return new ListWrapper<Key, Value, KeySoftValuePayload<Key,Value>>(new KeySoftValuePayload<Key,Value>(k,v,q));
+					},
+					// function to unwrap the payload
+					(w) -> {
+						return w.getPayload();
+					}
+			);
 		}
 		else if (policy.equals(MiniCacheBuilder.EvictionPolicy.EVICTION_NONE)) {
 			
 			if (weakKeys) {
 		    	final var evictionManager = new NoopManager<Key, Value, KeySoftValuePayload<Key,Value>>(null, null);	    	
-				final var cacheManager = new MapBasedCacheManager<Key, Value, KeySoftValuePayload<Key,Value>>(mapCreatorFunction(policy2, comparator), new ReadWriteGuard(),  evictionManager);
+				final var cacheManager = new MapBasedCacheManager<Key, Value, KeySoftValuePayload<Key,Value>>(mapCreatorFunction(storagePolicy, comparator), new ReadWriteGuard(),  evictionManager);
 				
 				return new SoftManager<Key, Value, KeySoftValuePayload<Key,Value>>(
 						cacheManager, 
@@ -108,7 +132,7 @@ public class ManagerFactory {
 			}
 		    else {
 				final var evictionManager = NoopManager.<Key, Value>ofIdentity();
-				return new MapBasedCacheManager<Key, Value, Value>(mapCreatorFunction(policy2, comparator), new ReadWriteGuard(), evictionManager);
+				return new MapBasedCacheManager<Key, Value, Value>(mapCreatorFunction(storagePolicy, comparator), new ReadWriteGuard(), evictionManager);
 		    }
 		}
 		
